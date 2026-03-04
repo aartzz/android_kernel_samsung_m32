@@ -47,7 +47,7 @@ set_opt CONFIG_RD_LZ4
 
 #MGLRU TEST
 
-set_opt CONFIG_LRU_GEN
+disable_opt CONFIG_LRU_GEN
 
 # ----------------------------------------------------------------------------
 # CPU Scheduler (BORE + Full Preemption)
