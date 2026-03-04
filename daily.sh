@@ -75,7 +75,10 @@ disable_opt CONFIG_PELT_UTIL_HALFLIFE_32
 # MediaTek SoC Optimizations (Base Thermal & Mgmt)
 # ----------------------------------------------------------------------------
 echo "[i] Configuring MediaTek Base Subsystems..."
-set_opt CONFIG_MTK_LOAD_TRACKER
+#Test WALT
+disable_opt CONFIG_MTK_LOAD_TRACKER
+set_opt CONFIG_SCHED_WALT
+
 set_opt CONFIG_MTK_CPU_CTRL_CFP
 set_opt CONFIG_MTK_PERF_OBSERVER
 set_opt CONFIG_MTK_FPSGO_V3
