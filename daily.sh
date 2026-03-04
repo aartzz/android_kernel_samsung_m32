@@ -45,6 +45,10 @@ set_opt CONFIG_ZRAM_DEF_COMP_LZ4
 set_opt CONFIG_CRYPTO_LZ4
 set_opt CONFIG_RD_LZ4
 
+#MGLRU TEST
+
+set_opt CONFIG_LRU_GEN
+
 # ----------------------------------------------------------------------------
 # CPU Scheduler (BORE + Full Preemption)
 # ----------------------------------------------------------------------------
@@ -60,6 +64,8 @@ set_opt CONFIG_SCHED_MC
 set_opt CONFIG_MTK_SCHED_EAS
 set_opt CONFIG_SCHED_ENERGY_AWARE
 set_val CONFIG_SCHED_MIGRATION_COST 500000
+set_opt CONFIG_UCLAMP_TASK
+
 
 # PELT 16ms (Reaction speed)
 set_opt CONFIG_PELT_UTIL_HALFLIFE_16
