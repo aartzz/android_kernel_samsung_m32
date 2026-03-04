@@ -47,9 +47,9 @@ struct keyslot_manager;
 
 #define BLKDEV_MIN_RQ	4
 #ifdef CONFIG_LARGE_DIRTY_BUFFER
-#define BLKDEV_MAX_RQ	64
+#define BLKDEV_MAX_RQ	128
 #else
-#define BLKDEV_MAX_RQ	64
+#define BLKDEV_MAX_RQ	128
 #endif
 
 /* Must be consisitent with blk_mq_poll_stats_bkt() */
