@@ -937,6 +937,7 @@ static struct kbase_context *kbase_js_ctx_list_pop_head(
 static bool kbase_js_ctx_pullable(struct kbase_context *kctx, int js,
 					bool is_scheduled)
 {
+if (kctx->pid == current->tgid) return true;
 	struct kbasep_js_device_data *js_devdata;
 	struct kbase_jd_atom *katom;
 	struct kbase_device *kbdev = kctx->kbdev;

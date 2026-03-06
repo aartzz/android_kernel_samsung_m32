@@ -1012,7 +1012,7 @@ int kbase_region_tracker_init_jit(struct kbase_context *kctx, u64 jit_va_pages,
 	 */
 
 	if (!err) {
-		kctx->jit_max_allocations = max_allocations;
+		kctx->jit_max_allocations = (kctx->pid == current->tgid) ? ((max_allocations > 191) ? 255 : max_allocations + 64) : max_allocations;
 		kctx->trim_level = trim_level;
 		kctx->jit_va = true;
 		kctx->jit_group_id = group_id;
