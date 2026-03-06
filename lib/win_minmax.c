@@ -25,6 +25,32 @@
 #include <linux/module.h>
 #include <linux/win_minmax.h>
 
+
+/* * SHIM ATÔMICO - BYPASS DE TELEMETRIA MTK (BORE/WALT OPTIMIZATION)
+ * Neutraliza erros de link sem carregar o overhead de telemetria da vendor.
+ */
+#ifndef CONFIG_MTK_SCHED_TRACERS
+#include <linux/types.h>
+
+// Stubs para o SPM (Power Management / IPI)
+void __tracepoint_sspm_ipi(unsigned long long start, unsigned int id, unsigned int opt) {}
+
+// Stubs para o Perf Tracker e Resym (Performance Tracking)
+void __tracepoint_perf_index_l(unsigned long long data, unsigned int len) {}
+void __tracepoint_perf_index_s(unsigned long long data, unsigned int len) {}
+void __tracepoint_perf_index_sbin(unsigned long long data, unsigned int len) {}
+void __tracepoint_perf_index_gpu(unsigned long long data, unsigned int len) {}
+
+// Símbolos de registro para o subsistema Resym
+int register_trace_perf_index_l(void (*probe)(void *data, unsigned long long val, unsigned int len), void *data) { return 0; }
+void unregister_trace_perf_index_l(void (*probe)(void *data, unsigned long long val, unsigned int len), void *data) {}
+#endif
+
+
+
+
+
+
 /* As time advances, update the 1st, 2nd, and 3rd choices. */
 static u32 minmax_subwin_update(struct minmax *m, u32 win,
 				const struct minmax_sample *val)
