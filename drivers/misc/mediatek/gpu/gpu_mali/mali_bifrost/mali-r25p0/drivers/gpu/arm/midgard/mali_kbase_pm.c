@@ -1,3 +1,5 @@
+#include <linux/delay.h>
+#include <linux/workqueue.h>
 /*
  *
  * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
@@ -124,6 +126,8 @@ void kbase_pm_context_idle(struct kbase_device *kbdev)
 	kbase_pm_lock(kbdev);
 
 	c = --kbdev->pm.active_count;
+	if (c == 0) { udelay(5000); }
+	
 	KBASE_KTRACE_ADD(kbdev, PM_CONTEXT_IDLE, NULL, c);
 
 	KBASE_DEBUG_ASSERT(c >= 0);
