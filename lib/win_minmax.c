@@ -26,26 +26,46 @@
 #include <linux/win_minmax.h>
 
 
-/* * SHIM ATÔMICO - BYPASS DE TELEMETRIA MTK (BORE/WALT OPTIMIZATION)
- * Neutraliza erros de link sem carregar o overhead de telemetria da vendor.
- */
-#ifndef CONFIG_MTK_SCHED_TRACERS
+#include <linux/module.h>
 #include <linux/types.h>
+#include <linux/win_minmax.h>
 
-// Stubs para o SPM (Power Management / IPI)
+/* * SHIM DE NEUTRALIZAÇÃO 2.1 - BYPASS DE TELEMETRIA MTK
+ * Força alinhamento de 8 bytes e silencia funções órfãs.
+ */
+
+#ifndef CONFIG_MTK_SCHED_TRACERS
+
+// Stub para bloquear cenários de Power Management da vendor (SSPM)
+__attribute__((aligned(8)))
+__attribute__((weak, aligned(8))) int sspm_ipi_lock_spm_scenario(void) {
+    return 0; // Retorno imediato, zero processamento.
+}
+
+// Stub para IPI (Inter-Processor Interrupt) - Silêncio molecular
+__attribute__((aligned(8)))
 void __tracepoint_sspm_ipi(unsigned long long start, unsigned int id, unsigned int opt) {}
 
-// Stubs para o Perf Tracker e Resym (Performance Tracking)
+// Stubs para o Perf Index (Telemetria de Performance)
+__attribute__((aligned(8)))
 void __tracepoint_perf_index_l(unsigned long long data, unsigned int len) {}
+__attribute__((aligned(8)))
 void __tracepoint_perf_index_s(unsigned long long data, unsigned int len) {}
+__attribute__((aligned(8)))
 void __tracepoint_perf_index_sbin(unsigned long long data, unsigned int len) {}
+__attribute__((aligned(8)))
 void __tracepoint_perf_index_gpu(unsigned long long data, unsigned int len) {}
 
-// Símbolos de registro para o subsistema Resym
-int register_trace_perf_index_l(void (*probe)(void *data, unsigned long long val, unsigned int len), void *data) { return 0; }
-void unregister_trace_perf_index_l(void (*probe)(void *data, unsigned long long val, unsigned int len), void *data) {}
-#endif
+// Símbolos de registro para o subsistema Resym - Retorno fake de sucesso
+__attribute__((aligned(8)))
+int register_trace_perf_index_l(void (*probe)(void *data, unsigned long long val, unsigned int len), void *data) { 
+    return 0; 
+}
 
+__attribute__((aligned(8)))
+void unregister_trace_perf_index_l(void (*probe)(void *data, unsigned long long val, unsigned int len), void *data) {}
+
+#endif
 
 
 

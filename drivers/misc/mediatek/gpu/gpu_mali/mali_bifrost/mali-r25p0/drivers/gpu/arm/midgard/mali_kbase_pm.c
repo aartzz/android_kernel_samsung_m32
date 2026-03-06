@@ -33,6 +33,7 @@
 #include <gpu/mali_kbase_gpu_regmap.h>
 #include <mali_kbase_vinstr.h>
 #include <mali_kbase_hwcnt_context.h>
+#include <linux/pm_runtime.h>
 
 #include <mali_kbase_pm.h>
 #include <mali_kbase_pm_internal.h>
@@ -116,37 +117,45 @@ int kbase_pm_context_active_handle_suspend(struct kbase_device *kbdev,
 
 KBASE_EXPORT_TEST_API(kbase_pm_context_active);
 
+
 void kbase_pm_context_idle(struct kbase_device *kbdev)
 {
 	int c;
 
 	KBASE_DEBUG_ASSERT(kbdev != NULL);
 
-
 	kbase_pm_lock(kbdev);
 
+	/* Matemática original: Decremento do contador de contextos ativos */
 	c = --kbdev->pm.active_count;
-	if (c == 0) { udelay(5000); }
-	
-	KBASE_KTRACE_ADD(kbdev, PM_CONTEXT_IDLE, NULL, c);
 
+	if (c == 0) {
+		/* * NOVO PILAR 2: Async Hysteresis (VSync 90Hz Sync)
+		 * Correção: Adicionado o argumento 'true' para habilitar o autosuspend.
+		 */
+		pm_runtime_set_autosuspend_delay(kbdev->dev, 15);
+		
+		/* Habilita o uso de autosuspend para o dispositivo Mali */
+		__pm_runtime_use_autosuspend(kbdev->dev, true); 
+		
+		/* Inicia a transição para idle respeitando o timer de 15ms */
+		__pm_runtime_idle(kbdev->dev, RPM_AUTO);
+	}
+
+	/* Fluxo de Tracing original da Mali */
+	KBASE_KTRACE_ADD(kbdev, PM_CONTEXT_IDLE, NULL, c);
 	KBASE_DEBUG_ASSERT(c >= 0);
 
 	if (c == 0) {
-		/* Last context has gone idle */
+		/* Hardware agora pode entrar em IDLE real */
 		kbase_hwaccess_pm_gpu_idle(kbdev);
 		kbase_clk_rate_trace_manager_gpu_idle(kbdev);
 
-		/* Wake up anyone waiting for this to become 0 (e.g. suspend).
-		 * The waiters must synchronize with us by locking the pm.lock
-		 * after waiting.
-		 */
+		/* Notifica processos esperando o idle (ex: Suspend de sistema) */
 		wake_up(&kbdev->pm.zero_active_count_wait);
 	}
 
 	kbase_pm_unlock(kbdev);
-	dev_dbg(kbdev->dev, "%s %d (pid = %d)\n", __func__,
-		kbdev->pm.active_count, current->pid);
 }
 
 KBASE_EXPORT_TEST_API(kbase_pm_context_idle);
