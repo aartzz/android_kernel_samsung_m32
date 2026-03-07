@@ -133,7 +133,7 @@ void kbase_pm_context_idle(struct kbase_device *kbdev)
 		/* * NOVO PILAR 2: Async Hysteresis (VSync 90Hz Sync)
 		 * Correção: Adicionado o argumento 'true' para habilitar o autosuspend.
 		 */
-		pm_runtime_set_autosuspend_delay(kbdev->dev, 15);
+		pm_runtime_set_autosuspend_delay(kbdev->dev, 300);
 		
 		/* Habilita o uso de autosuspend para o dispositivo Mali */
 		__pm_runtime_use_autosuspend(kbdev->dev, true); 

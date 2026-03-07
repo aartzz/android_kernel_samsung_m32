@@ -44,7 +44,7 @@
 /**
  * How long pm runtime should wait in milliseconds before suspending GPU
  */
-#define AUTO_SUSPEND_DELAY (100)
+#define AUTO_SUSPEND_DELAY (300)
 
 /**
  * struct mali_arb_plat - Internal DVFS Integrator state information

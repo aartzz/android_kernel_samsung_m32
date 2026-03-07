@@ -464,7 +464,7 @@ void proc_mali_register(void)
 	proc_create("utilization", 0, mali_pentry, &kbasep_gpu_utilization_debugfs_fops);
 	proc_create("frequency", 0, mali_pentry, &kbasep_gpu_frequency_debugfs_fops);
 	proc_create("dvfs_enable", S_IRUGO | S_IWUSR, mali_pentry, &kbasep_gpu_dvfs_enable_debugfs_fops);
-	proc_create("always_on", S_IRUGO | S_IWUSR, mali_pentry, &kbasep_gpu_always_on_debugfs_fops);
+	proc_create("coarse_demand", S_IRUGO | S_IWUSR, mali_pentry, &kbasep_gpu_always_on_debugfs_fops);
 	proc_create("debug_log", S_IRUGO | S_IWUSR, mali_pentry, &kbasep_gpu_debug_log_debugfs_fops);
 }
 
