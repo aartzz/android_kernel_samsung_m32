@@ -37,7 +37,7 @@ make O="$OUT_DIR" olddefconfig
 # ----------------------------------------------------------------------------
 echo "[i] Configuring ZRAM Performance..."
 set_opt CONFIG_ZRAM
-set_opt CONFIG_ZRAM_WRITEBACK
+disable_opt CONFIG_ZRAM_WRITEBACK
 set_opt CONFIG_ZSMALLOC
 set_opt CONFIG_ZSMALLOC_STAT
 disable_opt CONFIG_ZRAM_DEF_COMP_LZO
@@ -80,6 +80,27 @@ disable_opt CONFIG_MTK_TINYSYS_SSPM_DEBUG
 disable_opt CONFIG_MTK_MUSB_QMU_SUPPORT
 disable_opt CONFIG_MTK_MUSB_QMU_PURE_ZLP_SUPPORT
 
+
+# ----------------------------------------------------------------------------
+# Block I/O (Deadline + 128 Req Native)
+# ----------------------------------------------------------------------------
+echo "[i] Forcing Deadline I/O Scheduler..."
+set_opt CONFIG_IOSCHED_DEADLINE
+set_str CONFIG_DEFAULT_IOSCHED "deadline"
+set_opt CONFIG_BLK_DEV_THROTTLING
+
+
+# ----------------------------------------------------------------------------
+# Hardware Kill-Switches (Morte do GOS e Throttling Samsung)
+# ----------------------------------------------------------------------------
+echo "[i] Disabling Samsung GOS/ABC/Thermal-Stats drivers..."
+disable_opt CONFIG_SEC_ABC
+disable_opt CONFIG_SEC_GAMESERVER
+disable_opt CONFIG_SEC_GOS
+disable_opt CONFIG_SEC_THERMAL_STATS
+disable_opt CONFIG_SEC_DEBUG_THERMAL_LOG
+
+
 # EAS & Scheduler Topology
 set_opt CONFIG_SCHED_MC
 set_opt CONFIG_MTK_SCHED_EAS
@@ -101,13 +122,16 @@ disable_opt CONFIG_MTK_LOAD_TRACKER
 set_opt CONFIG_SCHED_WALT
 
 set_opt CONFIG_MTK_CPU_CTRL_CFP
-set_opt CONFIG_MTK_PERF_OBSERVER
-set_opt CONFIG_MTK_FPSGO_V3
+disable_opt CONFIG_MTK_PERF_OBSERVER
+disable_opt CONFIG_MTK_FPSGO_V3
+set_opt CONFIG_RCU_NOCB_CPU
+set_opt CONFIG_RCU_BOOST
+set_val CONFIG_RCU_BOOST_DELAY 500
 set_opt CONFIG_MTK_EARA
 set_opt CONFIG_MTK_EARA_THERMAL
 set_opt CONFIG_PNPMGR
 set_opt CONFIG_MTK_PERFMGR
-disable_opt  CONFIG_MTK_RESYM
+disable_opt CONFIG_MTK_RESYM
 # Desativando conflitos com BORE e I/O Tweak
 disable_opt CONFIG_MTK_EARA_AI
 disable_opt CONFIG_MTK_IO_BOOST
@@ -127,9 +151,23 @@ set_opt CONFIG_NET_CLS_BPF
 # TCP Network (BBR + FQ Pacing)
 # ----------------------------------------------------------------------------
 echo "[i] Configuring TCP BBR + FQ..."
+set_opt CONFIG_NET_SCH_FQ_CODEL
 set_opt CONFIG_NET_SCH_FQ
-set_str CONFIG_DEFAULT_TCP_CONG "bbr"
 set_opt CONFIG_TCP_CONG_BBR
+disable_opt CONFIG_TCP_CONG_BIC
+set_str CONFIG_DEFAULT_TCP_CONG "bbr"
+
+#removing tcp cong trash
+
+disable_opt CONFIG_TCP_CONG_CUBIC
+disable_opt CONFIG_DEFAULT_CUBIC
+disable_opt CONFIG_TCP_CONG_RENO
+disable_opt CONFIG_DEFAULT_RENO
+disable_opt CONFIG_TCP_CONG_WESTWOOD
+disable_opt CONFIG_TCP_CONG_HTCP
+disable_opt CONFIG_TCP_CONG_HYBLA
+disable_opt CONFIG_TCP_CONG_VEGAS
+disable_opt CONFIG_TCP_CONG_SCALABLE
 
 # ----------------------------------------------------------------------------
 # KernelSU & LTO
@@ -138,6 +176,16 @@ set_opt CONFIG_KSU
 set_opt CONFIG_KSU_MANUAL_HOOK
 set_opt CONFIG_LTO_CLANG
 set_opt CONFIG_THINLTO
+
+
+
+# ----------------------------------------------------------------------------
+# Kernel Command Line (RCU Offload Injection)
+# ----------------------------------------------------------------------------
+echo "[i] Injecting rcu_nocbs=0-7 into cmdline..."
+set_opt CONFIG_CMDLINE_EXTEND
+set_str CONFIG_CMDLINE "rcu_nocbs=0-7"
+
 
 # ----------------------------------------------------------------------------
 # Final Serialization

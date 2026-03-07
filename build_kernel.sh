@@ -33,7 +33,7 @@ MAKE_FLAGS=(
     "LLVM_IAS=1"
     "LTO=thin"
     # Otimização agressiva via mcpu=cortex-a75 (FP16/DotProd nativo)
-    "KCFLAGS=-w -O3 -mcpu=cortex-a75"
+    "KCFLAGS=-w -O2"
     "CONFIG_SECTION_MISMATCH_WARN_ONLY=y"
 )
 

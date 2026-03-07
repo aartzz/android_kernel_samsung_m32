@@ -487,7 +487,7 @@ menuconfig TCP_CONG_ADVANCED
 
 if TCP_CONG_ADVANCED
 
-config TCP_CONG_BIC
+config TCP_CONG_BIC_DISABLED
 	tristate "Binary Increase Congestion (BIC) control"
 	default m
 	---help---

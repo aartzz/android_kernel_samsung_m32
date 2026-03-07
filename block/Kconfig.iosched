@@ -22,7 +22,7 @@ config IOSCHED_DEADLINE
 	  a new point in the service tree and doing a batch of IO from there
 	  in case of expiry.
 
-config IOSCHED_CFQ
+config IOSCHED_CFQ_DISABLED
 	tristate "CFQ I/O scheduler"
 	default y
 	---help---
