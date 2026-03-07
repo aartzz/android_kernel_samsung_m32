@@ -973,7 +973,7 @@ DEFINE_MUTEX(uclamp_mutex);
  * Minimum utilization for all tasks
  * default: 0
  */
-unsigned int sysctl_sched_uclamp_util_min;
+unsigned int sysctl_sched_uclamp_util_min = 1;
 
 /*
  * Maximum utilization for all tasks
