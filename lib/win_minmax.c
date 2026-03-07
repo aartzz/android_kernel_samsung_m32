@@ -1,3 +1,7 @@
+struct musb;
+void mtk_qmu_stop(struct musb *m) {}
+void mtk_qmu_start(struct musb *m) {}
+void mtk_qmu_pure_zlp_flush(struct musb *m) {}
 // SPDX-License-Identifier: GPL-2.0
 /**
  * lib/minmax.c: windowed min/max tracker

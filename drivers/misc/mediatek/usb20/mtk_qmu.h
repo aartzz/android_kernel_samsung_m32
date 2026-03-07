@@ -146,8 +146,8 @@ static inline int mtk_dbg_level(unsigned int level)
 
 #define QMU_DBG_ON
 #ifdef QMU_DBG_ON
-#define QMU_ERR(format, args...) do {if (mtk_dbg_level(LOG_ERR)) \
-	pr_notice("QMU_ERR,<%s %d>, " format, __func__, __LINE__, ## args);  } \
+#define pr_debug(format, args...) do {if (mtk_dbg_level(LOG_ERR)) \
+	pr_notice("pr_debug,<%s %d>, " format, __func__, __LINE__, ## args);  } \
 	while (0)
 #define QMU_WARN(format, args...) do {if (mtk_dbg_level(LOG_WARN)) \
 	pr_notice("QMU_WARN,<%s %d>, " format, __func__, __LINE__, ## args); } \
@@ -159,7 +159,7 @@ static inline int mtk_dbg_level(unsigned int level)
 	pr_notice("QMU_DBG,<%s %d>, " format, __func__, __LINE__, ## args);  } \
 	while (0)
 #else
-#define QMU_ERR(format, args...) do {} while (0)
+#define pr_debug(format, args...) do {} while (0)
 #define QMU_WARN(format, args...) do {} while (0)
 #define QMU_INFO(format, args...) do {} while (0)
 #define QMU_DBG(format, args...) do {} while (0)

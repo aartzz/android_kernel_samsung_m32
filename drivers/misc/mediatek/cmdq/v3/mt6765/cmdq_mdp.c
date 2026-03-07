@@ -354,7 +354,7 @@ mtk_iommu_callback_ret_t cmdq_TranslationFault_callback(
 	return MTK_IOMMU_CALLBACK_HANDLED;
 }
 #elif defined(CONFIG_MTK_M4U)
-enum m4u_callback_ret_t cmdq_TranslationFault_callback(
+m4u_callback_ret_t cmdq_TranslationFault_callback(
 	int port, unsigned int mva, void *data)
 {
 	char dispatchModel[MDP_DISPATCH_KEY_STR_LEN] = "MDP";
@@ -513,7 +513,8 @@ void cmdq_mdp_enable_clock(bool enable, enum CMDQ_ENG_ENUM engine)
 	case CMDQ_ENG_MDP_WROT0:
 #ifdef CONFIG_MTK_SMI_EXT
 		if (enable) {
-			smi_bus_prepare_enable(SMI_LARB0, "MDPSRAM");
+			smi_bus_prepare_enable(SMI_LARB0_REG_INDX, "MDPSRAM",
+				true);
 #if defined(CONFIG_MACH_MT6761)
 			/* Set WROT SRAM DELSEL */
 			CMDQ_REG_SET32(MMSYS_CONFIG_BASE + 0x8C0, 0xFFFFFFFE);
@@ -533,7 +534,8 @@ void cmdq_mdp_enable_clock(bool enable, enum CMDQ_ENG_ENUM engine)
 		}
 #ifdef CONFIG_MTK_SMI_EXT
 		if (!enable)
-			smi_bus_disable_unprepare(SMI_LARB0, "MDPSRAM");
+			smi_bus_disable_unprepare(SMI_LARB0_REG_INDX, "MDPSRAM",
+				true);
 #endif
 		break;
 	case CMDQ_ENG_MDP_TDSHP0:
@@ -1147,11 +1149,11 @@ static void cmdq_mdp_enable_common_clock(bool enable)
 #ifdef CONFIG_MTK_SMI_EXT
 	if (enable) {
 		/* Use SMI clock API */
-		smi_bus_prepare_enable(SMI_LARB0, "MDP");
+		smi_bus_prepare_enable(SMI_LARB0_REG_INDX, "MDP", true);
 
 	} else {
 		/* disable, reverse the sequence */
-		smi_bus_disable_unprepare(SMI_LARB0, "MDP");
+		smi_bus_disable_unprepare(SMI_LARB0_REG_INDX, "MDP", true);
 	}
 #endif
 #endif	/* CMDQ_PWR_AWARE */

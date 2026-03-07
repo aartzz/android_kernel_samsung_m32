@@ -1,5 +1,5 @@
 ### AnyKernel3 Ramdisk Mod Script
-### Modified by @RissuDesu
+### Modified by @OrkGabb
 ## osm0sis @ xda-developers
 
 ### AnyKernel setup
@@ -48,8 +48,6 @@ ui_print "  Fork of upstream kernel by RISSU (rsuntk) — many thanks to him.";
 ui_print " ";
 ui_print "  Performance-focused kernel with overclocking, undervolting";
 ui_print "  and selected backports/tweaks for improved responsiveness.";
-ui_print " ";
-ui_print "   - CCI/GPU/CPU OC/UV Redesigned for greater efficiency and performance +  DVFS Boost.";
 ui_print " ";
 ui_print "  DISCLAIMER: Use at your own risk. I do not accept responsibility for";
 ui_print "              any damage that may result from applying this kernel.";
