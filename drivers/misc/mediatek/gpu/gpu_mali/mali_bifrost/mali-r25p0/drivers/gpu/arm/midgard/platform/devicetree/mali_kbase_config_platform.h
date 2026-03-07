@@ -46,4 +46,4 @@ extern struct kbase_clk_rate_trace_op_conf clk_rate_trace_ops;
  *
  * The delay time (in milliseconds) to be used for autosuspend
  */
-#define AUTO_SUSPEND_DELAY (100)
+#define AUTO_SUSPEND_DELAY (300)

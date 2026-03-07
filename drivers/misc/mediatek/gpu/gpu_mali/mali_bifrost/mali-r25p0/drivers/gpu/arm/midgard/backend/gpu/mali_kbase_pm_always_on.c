@@ -56,7 +56,7 @@ static void always_on_term(struct kbase_device *kbdev)
  * and name.
  */
 const struct kbase_pm_policy kbase_pm_always_on_policy_ops = {
-	"always_on",			/* name */
+	"coarse_demand",			/* name */
 	always_on_init,			/* init */
 	always_on_term,			/* term */
 	always_on_shaders_needed,	/* shaders_needed */

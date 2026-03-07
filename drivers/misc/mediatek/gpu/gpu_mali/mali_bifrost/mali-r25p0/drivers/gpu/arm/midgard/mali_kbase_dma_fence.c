@@ -426,15 +426,16 @@ void kbase_dma_fence_cancel_callbacks(struct kbase_jd_atom *katom)
 
 void kbase_dma_fence_signal(struct kbase_jd_atom *katom)
 {
-	if (!katom->dma_fence.fence)
-		return;
+    if (!katom->dma_fence.fence)
+        return;
 
-	/* Signal the atom's fence. */
-	dma_fence_signal(katom->dma_fence.fence);
-
-	kbase_fence_out_remove(katom);
-
-	kbase_fence_free_callbacks(katom);
+    /* * ATOMIC DMA-FENCE FAST-SIGNALING (Zero-Wait VSync)
+     * Isola a CPU para sinalizar o término do frame imediatamente ao SurfaceFlinger,
+     * furando a fila do escalonador padrão.
+     */
+    preempt_disable();
+    dma_fence_signal(katom->dma_fence.fence);
+    preempt_enable();
 }
 
 void kbase_dma_fence_term(struct kbase_context *kctx)
