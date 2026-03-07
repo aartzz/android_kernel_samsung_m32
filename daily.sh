@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================================
-# Kernel Build Configuration Script - OPTIMIZED FOR BORE + M32
+# Kernel Build Configuration Script - OPTIMIZED FOR BORE + M32 + 90Hz UI
 # Target: MT6769V (Samsung M32)
 # Toolchain: Clang 21 + ThinLTO
 # ============================================================================
@@ -46,22 +46,27 @@ set_opt CONFIG_CRYPTO_LZ4
 set_opt CONFIG_RD_LZ4
 
 #MGLRU TEST
-
 disable_opt CONFIG_LRU_GEN
 
 # ----------------------------------------------------------------------------
-# CPU Scheduler (BORE + Full Preemption)
+# CPU Scheduler (BORE + Full Preemption + 90Hz UI Snappiness)
 # ----------------------------------------------------------------------------
-echo "[i] Unlocking BORE Power (Full Preemption)..."
+echo "[i] Unlocking BORE Power & 90Hz UI Boost..."
 set_opt CONFIG_SCHED_BORE
 set_opt CONFIG_PREEMPT
 disable_opt CONFIG_PREEMPT_VOLUNTARY
 disable_opt CONFIG_PREEMPT_RT
 disable_opt CONFIG_PREEMPT_NONE
 disable_opt CONFIG_PRIO_LIMIT_HMP_BOOST
-disable_opt CONFIG_MTK_SCHED_BOOST
-disable_opt CONFIG_SEC_INPUT_BOOSTER_MTK
-disable_opt CONFIG_SEC_INPUT_BOOSTER
+
+# REATIVADOS PARA FLUIDEZ DA UI (90Hz Frame Budget)
+set_opt CONFIG_SEC_INPUT_BOOSTER
+set_opt CONFIG_SEC_INPUT_BOOSTER_MTK
+set_opt CONFIG_MTK_SCHED_BOOST
+set_opt CONFIG_MTK_SCHED_INTERACTION_BOOST
+set_opt CONFIG_SCHED_TUNE
+disable_opt CONFIG_WQ_POWER_EFFICIENT_DEFAULT # Força workqueues a responderem rápido
+
 disable_opt CONFIG_SCHED_HMP
 disable_opt CONFIG_SCHED_HMP_PRIO_FILTER_VAL
 disable_opt CONFIG_SCHEDSTATS
@@ -80,7 +85,6 @@ disable_opt CONFIG_MTK_TINYSYS_SSPM_DEBUG
 disable_opt CONFIG_MTK_MUSB_QMU_SUPPORT
 disable_opt CONFIG_MTK_MUSB_QMU_PURE_ZLP_SUPPORT
 
-
 # ----------------------------------------------------------------------------
 # Block I/O (Deadline + 128 Req Native)
 # ----------------------------------------------------------------------------
@@ -89,9 +93,8 @@ set_opt CONFIG_IOSCHED_DEADLINE
 set_str CONFIG_DEFAULT_IOSCHED "deadline"
 set_opt CONFIG_BLK_DEV_THROTTLING
 
-
 # ----------------------------------------------------------------------------
-# Hardware Kill-Switches (Morte do GOS e Throttling Samsung)
+# Hardware Kill-Switches & Silencing (TrustZone Safe)
 # ----------------------------------------------------------------------------
 echo "[i] Disabling Samsung GOS/ABC/Thermal-Stats drivers..."
 set_opt CONFIG_SEC_ABC
@@ -102,21 +105,26 @@ disable_opt CONFIG_SEC_GAMESERVER
 disable_opt CONFIG_SEC_DEBUG_THERMAL_LOG
 disable_opt CONFIG_SEC_DEBUG_TSP_LOG
 
+# Loglevels & Debug Stripping
 set_opt CONFIG_CONSOLE_LOGLEVEL_DEFAULT=3
 set_opt CONFIG_MESSAGE_LOGLEVEL_DEFAULT=3
-
 disable_opt CONFIG_DYNAMIC_DEBUG
 disable_opt CONFIG_FUNCTION_TRACER
 disable_opt CONFIG_STACKTRACE
+disable_opt CONFIG_PRINTK_TIME
+disable_opt CONFIG_DEBUG_SECTION_MISMATCH
 set_val CONFIG_RCU_CPU_STALL_TIMEOUT 120
 
+# ----------------------------------------------------------------------------
 # EAS & Scheduler Topology
+# ----------------------------------------------------------------------------
 set_opt CONFIG_SCHED_MC
 set_opt CONFIG_MTK_SCHED_EAS
 set_opt CONFIG_SCHED_ENERGY_AWARE
-set_val CONFIG_SCHED_MIGRATION_COST 500000
+# Custo de migração reduzido de 500k para 250k para UI saltar pros Big Cores mais rápido
+set_val CONFIG_SCHED_MIGRATION_COST 250000
 set_opt CONFIG_UCLAMP_TASK
-
+set_opt CONFIG_UCLAMP_TASK_GROUP
 
 # PELT 16ms (Reaction speed)
 set_opt CONFIG_PELT_UTIL_HALFLIFE_16
@@ -126,7 +134,6 @@ disable_opt CONFIG_PELT_UTIL_HALFLIFE_32
 # MediaTek SoC Optimizations (Base Thermal & Mgmt)
 # ----------------------------------------------------------------------------
 echo "[i] Configuring MediaTek Base Subsystems..."
-#Test WALT
 disable_opt CONFIG_MTK_LOAD_TRACKER
 set_opt CONFIG_SCHED_WALT
 
@@ -141,6 +148,7 @@ set_opt CONFIG_MTK_EARA_THERMAL
 set_opt CONFIG_PNPMGR
 set_opt CONFIG_MTK_PERFMGR
 disable_opt CONFIG_MTK_RESYM
+
 # Desativando conflitos com BORE e I/O Tweak
 disable_opt CONFIG_MTK_EARA_AI
 disable_opt CONFIG_MTK_IO_BOOST
@@ -166,8 +174,7 @@ set_opt CONFIG_TCP_CONG_BBR
 disable_opt CONFIG_TCP_CONG_BIC
 set_str CONFIG_DEFAULT_TCP_CONG "bbr"
 
-#removing tcp cong trash
-
+# Removing TCP cong trash
 disable_opt CONFIG_TCP_CONG_CUBIC
 disable_opt CONFIG_DEFAULT_CUBIC
 disable_opt CONFIG_TCP_CONG_RENO
@@ -186,15 +193,12 @@ set_opt CONFIG_KSU_MANUAL_HOOK
 set_opt CONFIG_LTO_CLANG
 set_opt CONFIG_THINLTO
 
-
-
 # ----------------------------------------------------------------------------
 # Kernel Command Line (RCU Offload Injection)
 # ----------------------------------------------------------------------------
-echo "[i] Injecting rcu_nocbs=0-7 into cmdline..."
+echo "[i] Command Line handling..."
 disable_opt CONFIG_CMDLINE_EXTEND
 #set_str CONFIG_CMDLINE "rcu_nocbs=0-7"
-
 
 # ----------------------------------------------------------------------------
 # Final Serialization
@@ -205,5 +209,5 @@ make O="$OUT_DIR" savedefconfig
 cp -v "$OUT_DIR/defconfig" "$DEFCONFIG_PATH"
 
 echo ""
-echo "✅ Done! BORE is now in PREEMPT mode."
-echo "Run: bash build_kernel.sh"
+echo "✅ Done! BORE + WALT with 90Hz Input Boost is ready."
+echo "Run: rm -rf out/ && bash build_kernel.sh"

@@ -86,7 +86,7 @@
 
 			/* Time table */
 			input_booster,head_time = <130>;
-			input_booster,tail_time = <500>;
+			input_booster,tail_time = <400>;
 
 			/* Input Booster Resource Frequency */
 			inputbooster,resource {
@@ -109,7 +109,7 @@
 
 			/* Time table */
 			input_booster,head_time = <1000>;
-			input_booster,tail_time = <500>;
+			input_booster,tail_time = <400>;
 
 			/* Input Booster Resource Frequency */
 			inputbooster,resource {
