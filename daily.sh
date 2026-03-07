@@ -94,12 +94,21 @@ set_opt CONFIG_BLK_DEV_THROTTLING
 # Hardware Kill-Switches (Morte do GOS e Throttling Samsung)
 # ----------------------------------------------------------------------------
 echo "[i] Disabling Samsung GOS/ABC/Thermal-Stats drivers..."
-disable_opt CONFIG_SEC_ABC
-disable_opt CONFIG_SEC_GAMESERVER
-disable_opt CONFIG_SEC_GOS
-disable_opt CONFIG_SEC_THERMAL_STATS
-disable_opt CONFIG_SEC_DEBUG_THERMAL_LOG
+set_opt CONFIG_SEC_ABC
+set_opt CONFIG_SEC_GOS
+set_opt CONFIG_SEC_THERMAL_STATS
 
+disable_opt CONFIG_SEC_GAMESERVER
+disable_opt CONFIG_SEC_DEBUG_THERMAL_LOG
+disable_opt CONFIG_SEC_DEBUG_TSP_LOG
+
+set_opt CONFIG_CONSOLE_LOGLEVEL_DEFAULT=3
+set_opt CONFIG_MESSAGE_LOGLEVEL_DEFAULT=3
+
+disable_opt CONFIG_DYNAMIC_DEBUG
+disable_opt CONFIG_FUNCTION_TRACER
+disable_opt CONFIG_STACKTRACE
+set_val CONFIG_RCU_CPU_STALL_TIMEOUT 120
 
 # EAS & Scheduler Topology
 set_opt CONFIG_SCHED_MC
@@ -183,8 +192,8 @@ set_opt CONFIG_THINLTO
 # Kernel Command Line (RCU Offload Injection)
 # ----------------------------------------------------------------------------
 echo "[i] Injecting rcu_nocbs=0-7 into cmdline..."
-set_opt CONFIG_CMDLINE_EXTEND
-set_str CONFIG_CMDLINE "rcu_nocbs=0-7"
+disable_opt CONFIG_CMDLINE_EXTEND
+#set_str CONFIG_CMDLINE "rcu_nocbs=0-7"
 
 
 # ----------------------------------------------------------------------------
