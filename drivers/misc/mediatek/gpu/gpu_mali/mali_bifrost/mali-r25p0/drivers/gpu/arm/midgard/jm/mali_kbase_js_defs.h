@@ -62,7 +62,7 @@ typedef void (*kbasep_js_ctx_job_cb)(struct kbase_device *kbdev, struct kbase_jd
  * is running. Otherwise, it potentially allows an unlimited number of GPU NULL
  * jobs to be submitted inside the IRQ handler, which increases IRQ latency.
  */
-#define KBASE_JS_MAX_JOB_SUBMIT_PER_SLOT_PER_IRQ 2
+#define KBASE_JS_MAX_JOB_SUBMIT_PER_SLOT_PER_IRQ 8
 
 /**
  * @brief Context attributes
