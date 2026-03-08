@@ -84,7 +84,6 @@ disable_opt CONFIG_MTK_PERF_TRACKER
 disable_opt CONFIG_MTK_TINYSYS_SSPM_DEBUG
 disable_opt CONFIG_MTK_MUSB_QMU_SUPPORT
 disable_opt CONFIG_MTK_MUSB_QMU_PURE_ZLP_SUPPORT
-
 # ----------------------------------------------------------------------------
 # Block I/O (Deadline + 128 Req Native)
 # ----------------------------------------------------------------------------
@@ -104,6 +103,10 @@ set_opt CONFIG_SEC_THERMAL_STATS
 disable_opt CONFIG_SEC_GAMESERVER
 disable_opt CONFIG_SEC_DEBUG_THERMAL_LOG
 disable_opt CONFIG_SEC_DEBUG_TSP_LOG
+
+# PTPOD Annihilation
+disable_opt CONFIG_MTK_PTPOD
+disable_opt CONFIG_MTK_THERMAL_PTPOD
 
 # Loglevels & Debug Stripping
 set_opt CONFIG_CONSOLE_LOGLEVEL_DEFAULT=3
@@ -133,7 +136,7 @@ disable_opt CONFIG_PELT_UTIL_HALFLIFE_32
 # ----------------------------------------------------------------------------
 # MediaTek SoC Optimizations (Base Thermal & Mgmt)
 # ----------------------------------------------------------------------------
-echo "[i] Configuring MediaTek Base Subsystems..."
+echo "[i] Configuring MediaTek Base Subsystems (Dumb Thermal, Smart Sched)..."
 disable_opt CONFIG_MTK_LOAD_TRACKER
 set_opt CONFIG_SCHED_WALT
 
@@ -143,14 +146,15 @@ disable_opt CONFIG_MTK_FPSGO_V3
 set_opt CONFIG_RCU_NOCB_CPU
 set_opt CONFIG_RCU_BOOST
 set_val CONFIG_RCU_BOOST_DELAY 500
-set_opt CONFIG_MTK_EARA
-set_opt CONFIG_MTK_EARA_THERMAL
-set_opt CONFIG_PNPMGR
-set_opt CONFIG_MTK_PERFMGR
-disable_opt CONFIG_MTK_RESYM
 
-# Desativando conflitos com BORE e I/O Tweak
+# MTK Proprietary Power & Thermal Management Anihillation (Orphaned by Samsung Firmware)
+disable_opt CONFIG_MTK_EARA
+disable_opt CONFIG_MTK_EARA_THERMAL
 disable_opt CONFIG_MTK_EARA_AI
+disable_opt CONFIG_PNPMGR
+set_opt CONFIG_MTK_PERFMGR
+set_opt CONFIG_MTK_PPM
+disable_opt CONFIG_MTK_RESYM
 disable_opt CONFIG_MTK_IO_BOOST
 
 # ----------------------------------------------------------------------------
@@ -209,5 +213,5 @@ make O="$OUT_DIR" savedefconfig
 cp -v "$OUT_DIR/defconfig" "$DEFCONFIG_PATH"
 
 echo ""
-echo "✅ Done! BORE + WALT with 90Hz Input Boost is ready."
-echo "Run: rm -rf out/ && bash build_kernel.sh"
+echo "✅ Done! BORE + WALT with MTK Thermal Managers Anihilated."
+echo "Run: bash build_kernel.sh"
