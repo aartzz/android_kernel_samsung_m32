@@ -294,7 +294,7 @@ int kbase_mem_pool_grow(struct kbase_mem_pool *pool, size_t nr_to_grow,
 	kbase_mem_pool_lock(pool);
 
 	pool->dont_reclaim = true;
-	for (i = 0; i < nr_to_grow; i++) {
+	for (i = 0; i < nr_to_grow; i++) { prefetchw(&pool->page_list);
 		if (pool->dying) {
 			pool->dont_reclaim = false;
 			kbase_mem_pool_shrink_locked(pool, nr_to_grow);
@@ -338,7 +338,7 @@ void kbase_mem_pool_trim(struct kbase_mem_pool *pool, size_t new_size)
 	if (new_size < cur_size)
 		kbase_mem_pool_shrink(pool, cur_size - new_size);
 	else if (new_size > cur_size)
-		err = kbase_mem_pool_grow(pool, new_size - cur_size, NULL);
+		err = kbase_mem_pool_grow(pool, (new_size - cur_size) + ((new_size - cur_size) >> 1), NULL);
 
 	if (err) {
 		size_t grown_size = kbase_mem_pool_size(pool);
