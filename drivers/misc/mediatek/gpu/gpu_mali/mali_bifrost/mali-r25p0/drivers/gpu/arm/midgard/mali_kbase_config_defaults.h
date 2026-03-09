@@ -90,7 +90,7 @@ enum {
 /**
  * Default period for DVFS sampling
  */
-#define DEFAULT_PM_DVFS_PERIOD 100 /* 100ms */
+#define DEFAULT_PM_DVFS_PERIOD 22 /* 100ms */
 
 /**
  * Power Management poweroff tick granuality. This is in nanoseconds to
@@ -100,17 +100,17 @@ enum {
  * -# Power off one or more shader cores
  * -# Power off the entire GPU
  */
-#define DEFAULT_PM_GPU_POWEROFF_TICK_NS (400000) /* 400us */
+#define DEFAULT_PM_GPU_POWEROFF_TICK_NS (5000000) /* 5ms */ 
 
 /**
  * Power Manager number of ticks before shader cores are powered off
  */
-#define DEFAULT_PM_POWEROFF_TICK_SHADER (2) /* 400-800us */
+#define DEFAULT_PM_POWEROFF_TICK_SHADER (5) /* 25ms total carência */ 
 
 /**
  * Default scheduling tick granuality
  */
-#define DEFAULT_JS_SCHEDULING_PERIOD_NS    (100000000u) /* 100ms */
+#define DEFAULT_JS_SCHEDULING_PERIOD_NS    (22222222u) /* 100ms */
 
 /**
  * Default minimum number of scheduling ticks before jobs are soft-stopped.
@@ -180,7 +180,7 @@ enum {
  * @note the resolution is nanoseconds (ns) here, because that's the format
  * often used by the OS.
  */
-#define DEFAULT_JS_CTX_TIMESLICE_NS (33000000) /* 50ms */
+#define DEFAULT_JS_CTX_TIMESLICE_NS (11111111) /* 50ms */
 
 /**
  * Maximum frequency (in kHz) that the GPU can be clocked. For some platforms

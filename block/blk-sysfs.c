@@ -78,7 +78,7 @@ queue_requests_store(struct request_queue *q, const char *page, size_t count)
 	if (nr < BLKDEV_MIN_RQ)
 		nr = BLKDEV_MIN_RQ;
 
-	nr = 128;
+	nr = 64;
 
 	if (q->request_fn)
 		err = blk_update_nr_requests(q, nr);
@@ -1308,7 +1308,7 @@ clear_bit(QUEUE_FLAG_ADD_RANDOM, &q->queue_flags);
 /* 4. NOMERGE=2 (Disable elevator merge logic for random I/O) */
 set_bit(QUEUE_FLAG_NOMERGES, &q->queue_flags);
 /* 5. NR_REQUESTS=64 (2x CQE Depth to prevent controller starvation) */
-q->nr_requests = 128;
+q->nr_requests = 64;
 /* --------------------------------------------------- */
 
 	/*
