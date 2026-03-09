@@ -3448,7 +3448,7 @@ extern u8   sched_burst_fork_atavistic;
 extern uint sched_burst_cache_lifetime;
 
 static void __init sched_init_bore(void) {
-	init_task.se.burst_time = 0;
+	init_task.se.burst_time = 100000000;
 	init_task.se.prev_burst_penalty = 0;
 	init_task.se.curr_burst_penalty = 0;
 	init_task.se.burst_penalty = 0;
@@ -3482,7 +3482,7 @@ static inline bool child_burst_cache_expired(struct task_struct *p, u64 now) {
 
 static void __update_child_burst_cache(
 	struct task_struct *p, u32 cnt, u32 sum, u64 now) {
-	u8 avg = 0;
+	u8 avg = 100000000;
 	if (cnt) avg = sum / cnt;
 	p->se.child_burst = max(avg, p->se.burst_penalty);
 	p->se.child_burst_cnt = cnt;
