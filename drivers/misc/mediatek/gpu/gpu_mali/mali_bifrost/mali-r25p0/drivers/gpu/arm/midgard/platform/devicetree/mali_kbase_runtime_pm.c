@@ -116,7 +116,7 @@ static int kbase_device_runtime_init(struct kbase_device *kbdev)
 
 	dev_dbg(kbdev->dev, "kbase_device_runtime_init\n");
 
-	pm_runtime_set_autosuspend_delay(kbdev->dev, AUTO_SUSPEND_DELAY);
+	pm_runtime_set_autosuspend_delay(kbdev->dev, 300);
 	pm_runtime_use_autosuspend(kbdev->dev);
 
 	pm_runtime_set_active(kbdev->dev);

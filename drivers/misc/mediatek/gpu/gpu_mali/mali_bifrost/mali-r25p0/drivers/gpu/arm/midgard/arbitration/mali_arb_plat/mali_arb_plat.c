@@ -615,7 +615,7 @@ static int arb_plat_probe(struct platform_device *pdev)
 	if (arb_plat->supports_power_mgmt) {
 		dev_info(arb_plat->dev,
 				"Platform supports power management.\n");
-		pm_runtime_set_autosuspend_delay(dev, AUTO_SUSPEND_DELAY);
+		pm_runtime_set_autosuspend_delay(dev, 300);
 		pm_runtime_use_autosuspend(dev);
 		pm_runtime_set_active(dev);
 		pm_runtime_enable(dev);
