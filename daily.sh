@@ -128,8 +128,7 @@ echo "[i] Tuning Binder and Virtual Memory..."
 set_val CONFIG_ANDROID_BINDER_MAX_ALLOC_PAGES 256
 disable_opt CONFIG_CMDLINE_FORCE
 set_opt CONFIG_CMDLINE_EXTEND
-set_str CONFIG_CMDLINE "rcu_nocbs=0-7 vmalloc=448M"
-
+set_str CONFIG_CMDLINE "rcu_nocbs=6-7 vmalloc=448M"
 # ----------------------------------------------------------------------------
 # EAS & PELT 16ms
 # ----------------------------------------------------------------------------
