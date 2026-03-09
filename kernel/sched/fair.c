@@ -107,11 +107,11 @@ enum sched_tunable_scaling sysctl_sched_tunable_scaling = SCHED_TUNABLESCALING_N
  * (CFS  default: 0.75 msec * (1 + ilog(ncpus)), units: nanoseconds)
  */
 #ifdef CONFIG_SCHED_BORE
-unsigned int sysctl_sched_min_granularity			= 1000000ULL;
-unsigned int normalized_sysctl_sched_min_granularity	= 1000000ULL;
+unsigned int sysctl_sched_min_granularity			= 750000ULL;
+unsigned int normalized_sysctl_sched_min_granularity	= 750000ULL;
 #else // CONFIG_SCHED_BORE
-unsigned int sysctl_sched_min_granularity			= 1000000ULL;
-unsigned int normalized_sysctl_sched_min_granularity	= 1000000ULL;
+unsigned int sysctl_sched_min_granularity			= 750000ULL;
+unsigned int normalized_sysctl_sched_min_granularity	= 750000ULL;
 #endif // CONFIG_SCHED_BORE
 
 /*
@@ -165,9 +165,9 @@ static inline struct task_struct *task_of(struct sched_entity *se)
 uint __read_mostly sched_bore                   = 1;
 uint __read_mostly sched_burst_smoothness_long  = 1;
 uint __read_mostly sched_burst_smoothness_short = 1;
-uint __read_mostly sched_burst_fork_atavistic   = 2;
-uint __read_mostly sched_burst_penalty_offset   = 24;
-uint __read_mostly sched_burst_penalty_scale    = 1280;
+uint __read_mostly sched_burst_fork_atavistic   = 0;
+uint __read_mostly sched_burst_penalty_offset   = 40;
+uint __read_mostly sched_burst_penalty_scale    = 1024;
 uint __read_mostly sched_burst_cache_lifetime   = 75000000;
 
 #define MAX_BURST_PENALTY (39U <<2)
