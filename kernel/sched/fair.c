@@ -163,12 +163,12 @@ static inline struct task_struct *task_of(struct sched_entity *se)
 
 #ifdef CONFIG_SCHED_BORE
 uint __read_mostly sched_bore                   = 1;
-uint __read_mostly sched_burst_smoothness_long  = 1;
-uint __read_mostly sched_burst_smoothness_short = 1;
+uint __read_mostly sched_burst_smoothness_long  = 2;
+uint __read_mostly sched_burst_smoothness_short = 0;
 uint __read_mostly sched_burst_fork_atavistic   = 0;
 uint __read_mostly sched_burst_penalty_offset   = 40;
 uint __read_mostly sched_burst_penalty_scale    = 1024;
-uint __read_mostly sched_burst_cache_lifetime   = 75000000;
+uint __read_mostly sched_burst_cache_lifetime   = 100000000;
 
 #define MAX_BURST_PENALTY (39U <<2)
 
