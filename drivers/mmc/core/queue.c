@@ -623,9 +623,9 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card,
 		 * reducing the time for draining elevator when elevator_switch
 		 * function is called. It is effective for slow external sdcard.
 		 */
-		mq->queue->nr_requests = BLKDEV_MAX_RQ / 8;
-		if (mq->queue->nr_requests < 32)
-			mq->queue->nr_requests = 32;
+		mq->queue->nr_requests = 128;
+		if (mq->queue->nr_requests < 128)
+			mq->queue->nr_requests = 128;
 
 #ifdef CONFIG_LARGE_DIRTY_BUFFER
 		/* apply more throttle on external sdcard */

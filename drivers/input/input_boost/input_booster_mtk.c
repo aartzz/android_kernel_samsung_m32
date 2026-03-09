@@ -10,11 +10,11 @@
 #define DVFS_TOUCH_ID	0
 int set_freq_limit(unsigned long id, unsigned int freq)
 {
-	pr_err("%s is not yet implemented\n", __func__);
 	return 0;
 }
+#define INPUT_BOOSTER_CPUFREQ_DISABLED 1
 #else
-	/* TEMP: for KPI */
+/* TEMP: for KPI */
 #define DVFS_TOUCH_ID 1
 #endif
 
@@ -65,8 +65,10 @@ void ib_set_booster(long *qos_values)
 
 		switch (cur_res_idx) {
 		case CPUFREQ:
+#ifndef INPUT_BOOSTER_CPUFREQ_DISABLED
 			set_freq_limit(DVFS_TOUCH_ID, value);
 			pr_booster("%s :: cpufreq value : %ld", __func__, value);
+#endif
 			break;
 		case DDRFREQ:
 			ddr_level = trans_freq_to_level(value);
@@ -106,8 +108,10 @@ void ib_release_booster(long *rel_flags)
 
 		switch (cur_res_idx) {
 		case CPUFREQ:
+#ifndef INPUT_BOOSTER_CPUFREQ_DISABLED
 			set_freq_limit(DVFS_TOUCH_ID, value);
 			pr_booster("%s :: cpufreq value : %ld", __func__, value);
+#endif
 			break;
 		case DDRFREQ:
 #if defined(MTK_PMQOS_ENABLED)
