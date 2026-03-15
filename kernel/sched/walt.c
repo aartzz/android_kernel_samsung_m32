@@ -33,7 +33,7 @@
 
 #define EXITING_TASK_MARKER	0xdeaddead
 
-static __read_mostly unsigned int walt_ravg_hist_size = 3;
+static __read_mostly unsigned int walt_ravg_hist_size = 8;
 static __read_mostly unsigned int walt_window_stats_policy =
 	WINDOW_STATS_MAX_RECENT_AVG;
 static __read_mostly unsigned int walt_account_wait_time = 1;
