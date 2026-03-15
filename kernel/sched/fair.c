@@ -60,8 +60,8 @@
  * (CFS  default: 6ms * (1 + ilog(ncpus)), units: nanoseconds)
  */
 #ifdef CONFIG_SCHED_BORE
-unsigned int sysctl_sched_latency			= 4000000ULL;
-static unsigned int normalized_sysctl_sched_latency	= 4000000ULL;
+unsigned int sysctl_sched_latency			= 12000000ULL;
+static unsigned int normalized_sysctl_sched_latency	= 12000000ULL;
 #else // CONFIG_SCHED_BORE
 unsigned int sysctl_sched_latency			= 4000000ULL;
 unsigned int normalized_sysctl_sched_latency		= 4000000ULL;
@@ -166,7 +166,7 @@ uint __read_mostly sched_bore                   = 1;
 uint __read_mostly sched_burst_smoothness_long  = 2;
 uint __read_mostly sched_burst_smoothness_short = 0;
 uint __read_mostly sched_burst_fork_atavistic   = 0;
-uint __read_mostly sched_burst_penalty_offset   = 40;
+uint __read_mostly sched_burst_penalty_offset   = 22;
 uint __read_mostly sched_burst_penalty_scale    = 1024;
 uint __read_mostly sched_burst_cache_lifetime   = 100000000;
 
@@ -259,7 +259,7 @@ unsigned int sysctl_sched_cfs_bandwidth_slice		= 5000UL;
  *
  * (default: ~20%)
  */
-unsigned int capacity_margin				= 1280;
+unsigned int capacity_margin				= 1150;
 
 static inline void update_load_add(struct load_weight *lw, unsigned long inc)
 {
