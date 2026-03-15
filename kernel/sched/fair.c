@@ -60,11 +60,11 @@
  * (CFS  default: 6ms * (1 + ilog(ncpus)), units: nanoseconds)
  */
 #ifdef CONFIG_SCHED_BORE
-unsigned int sysctl_sched_latency			= 12000000ULL;
-static unsigned int normalized_sysctl_sched_latency	= 12000000ULL;
+unsigned int sysctl_sched_latency           = 10000000ULL;
+static unsigned int normalized_sysctl_sched_latency           = 10000000ULL;
 #else // CONFIG_SCHED_BORE
-unsigned int sysctl_sched_latency			= 4000000ULL;
-unsigned int normalized_sysctl_sched_latency		= 4000000ULL;
+unsigned int sysctl_sched_latency			=  4000000ULL;
+unsigned int normalized_sysctl_sched_latency		=  4000000ULL;
 #endif // CONFIG_SCHED_BORE
 
 /*
