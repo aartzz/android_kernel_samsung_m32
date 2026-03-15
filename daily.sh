@@ -92,12 +92,16 @@ set_val CONFIG_ANDROID_BINDER_MAX_ALLOC_PAGES 384
 disable_opt CONFIG_ANDROID_BINDER_IPC_SELFTEST
 
 # ----------------------------------------------------------------------------
-# Block I/O (BFQ para eMMC 5.1 + F2FS)
+# Block I/O (Deadline para eMMC 5.1 SQ)
+# eMMC 5.1 expoe Single Queue — BFQ gera overhead de fila por processo sem
+# ganho real pois o HW serializa tudo em uma unica fila de hardware.
+# Deadline garante anti-starvation de reads (read_expire=500ms) e write
+# batching (write_starved=2) ideal para F2FS sequential workload.
 # ----------------------------------------------------------------------------
-echo "[i] Setting BFQ I/O Scheduler for eMMC 5.1..."
-set_opt CONFIG_IOSCHED_BFQ
-set_str CONFIG_DEFAULT_IOSCHED "bfq"
-disable_opt CONFIG_IOSCHED_DEADLINE
+echo "[i] Setting Deadline I/O Scheduler for eMMC 5.1 SQ..."
+set_opt CONFIG_IOSCHED_DEADLINE
+set_str CONFIG_DEFAULT_IOSCHED "deadline"
+disable_opt CONFIG_IOSCHED_BFQ
 set_opt CONFIG_BLK_DEV_THROTTLING
 
 # ----------------------------------------------------------------------------
@@ -174,4 +178,4 @@ make O="$OUT_DIR" savedefconfig
 cp -v "$OUT_DIR/defconfig" "$DEFCONFIG_PATH"
 
 echo ""
-echo "✅ Done! daily.sh: BORE + RCU NOCB + BFQ + G52 TLB + EAS tuned."
+echo "✅ Done! daily.sh: BORE + RCU NOCB + Deadline(SQ) + G52 TLB + EAS tuned."
