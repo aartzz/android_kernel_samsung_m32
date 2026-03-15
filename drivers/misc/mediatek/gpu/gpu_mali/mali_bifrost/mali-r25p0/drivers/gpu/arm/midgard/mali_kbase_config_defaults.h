@@ -90,7 +90,7 @@ enum {
 /**
  * Default period for DVFS sampling
  */
-#define DEFAULT_PM_DVFS_PERIOD 22 /* 100ms */
+#define DEFAULT_PM_DVFS_PERIOD 3 /* ~14ms: within 60fps frame budget */
 
 /**
  * Power Management poweroff tick granuality. This is in nanoseconds to
@@ -100,12 +100,12 @@ enum {
  * -# Power off one or more shader cores
  * -# Power off the entire GPU
  */
-#define DEFAULT_PM_GPU_POWEROFF_TICK_NS (5000000) /* 5ms */ 
+#define DEFAULT_PM_GPU_POWEROFF_TICK_NS (10000000) /* 10ms */
 
 /**
  * Power Manager number of ticks before shader cores are powered off
  */
-#define DEFAULT_PM_POWEROFF_TICK_SHADER (5) /* 25ms total carência */ 
+#define DEFAULT_PM_POWEROFF_TICK_SHADER (20) /* 200ms total */
 
 /**
  * Default scheduling tick granuality
@@ -143,8 +143,7 @@ enum {
 
 /**
  * Default timeout for some software jobs, after which the software event wait
- * jobs will be cancelled.
- */
+ * jobs will be cancelled.\n */
 #define DEFAULT_JS_SOFT_JOB_TIMEOUT (3000) /* 3s */
 
 /**
@@ -210,4 +209,3 @@ enum {
 #define DEFAULT_IR_THRESHOLD (192)
 
 #endif /* _KBASE_CONFIG_DEFAULTS_H_ */
-
