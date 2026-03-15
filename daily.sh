@@ -72,21 +72,32 @@ disable_opt CONFIG_SCHEDSTATS
 disable_opt CONFIG_ENABLE_DEFAULT_TRACERS
 disable_opt CONFIG_MTK_SCHED_TRACERS
 
+# WALT+BORE: nenhum PELT halflife deve estar ativo
+# PELT ainda computa para cgroups/uclamp mas sem halflife forçado
+disable_opt CONFIG_PELT_UTIL_HALFLIFE_16
+disable_opt CONFIG_PELT_UTIL_HALFLIFE_32
+
+# EAS migration cost otimizado para MT6769 big.LITTLE (4xA75 + 4xA55)
+# 500us: reduz migracoes desnecessarias sem travar tasks no cluster errado
+set_val CONFIG_SCHED_MIGRATION_COST 500000
+
 # ----------------------------------------------------------------------------
-# Binder IPC (Fix: "failed, no address space" error)
+# Binder IPC
 # ----------------------------------------------------------------------------
-echo "[i] Expanding Binder IPC Pool for 90Hz overhead..."
+echo "[i] Tuning Binder IPC..."
 set_opt CONFIG_ANDROID_BINDER_IPC
 set_opt CONFIG_ANDROID_BINDERFS
-set_val CONFIG_ANDROID_BINDER_MAX_ALLOC_PAGES 512
+# 384 paginas = 1.5MB: cobre gaming pesado (Unity/Unreal) sem desperdicar RAM
+set_val CONFIG_ANDROID_BINDER_MAX_ALLOC_PAGES 384
 disable_opt CONFIG_ANDROID_BINDER_IPC_SELFTEST
 
 # ----------------------------------------------------------------------------
-# Block I/O (Deadline + 128 Req Native)
+# Block I/O (BFQ para eMMC 5.1 + F2FS)
 # ----------------------------------------------------------------------------
-echo "[i] Forcing Deadline I/O Scheduler..."
-set_opt CONFIG_IOSCHED_DEADLINE
-set_str CONFIG_DEFAULT_IOSCHED "deadline"
+echo "[i] Setting BFQ I/O Scheduler for eMMC 5.1..."
+set_opt CONFIG_IOSCHED_BFQ
+set_str CONFIG_DEFAULT_IOSCHED "bfq"
+disable_opt CONFIG_IOSCHED_DEADLINE
 set_opt CONFIG_BLK_DEV_THROTTLING
 
 # ----------------------------------------------------------------------------
@@ -108,33 +119,36 @@ disable_opt CONFIG_MALI_BIFROST_DEBUG
 disable_opt CONFIG_MALI_BIFROST_ERROR_DUMP
 disable_opt CONFIG_SEC_ST_GPU_LOW_TEMP_LIMIT
 
+# cgroup debug: overhead em toda operacao de cgroup (Mali, GED, tasks)
+disable_opt CONFIG_CGROUP_DEBUG
 
 # ----------------------------------------------------------------------------
-# RCU Performance (Offload Force for 90Hz Jitter Reduction)
+# RCU Performance (NOCB offload para 90Hz jitter reduction)
 # ----------------------------------------------------------------------------
 echo "[i] Forcing RCU NOCB Offload..."
 set_opt CONFIG_RCU_EXPERT
 set_opt CONFIG_RCU_NOCB_CPU
 set_opt CONFIG_RCU_NOCB_CPU_ALL
 set_opt CONFIG_RCU_BOOST
-set_val CONFIG_RCU_BOOST_DELAY 500
+# 100ms: responsivo para UI 90Hz (500ms anterior causava jitter em IRQ paths)
+set_val CONFIG_RCU_BOOST_DELAY 100
 set_val CONFIG_RCU_CPU_STALL_TIMEOUT 120
 disable_opt CONFIG_RCU_TRACE
 
 # ----------------------------------------------------------------------------
-# Binder & Memory Virtualization Fixes
+# Virtual Memory
 # ----------------------------------------------------------------------------
-echo "[i] Tuning Binder and Virtual Memory..."
-set_val CONFIG_ANDROID_BINDER_MAX_ALLOC_PAGES 256
+echo "[i] Tuning Virtual Memory..."
 disable_opt CONFIG_CMDLINE_FORCE
 set_opt CONFIG_CMDLINE_EXTEND
 set_str CONFIG_CMDLINE "rcu_nocbs=6-7 vmalloc=448M"
+
 # ----------------------------------------------------------------------------
-# EAS & PELT 16ms
+# Mali G52 MC2 — TLB efficiency
 # ----------------------------------------------------------------------------
-set_val CONFIG_SCHED_MIGRATION_COST 250000
-set_opt CONFIG_PELT_UTIL_HALFLIFE_16
-disable_opt CONFIG_PELT_UTIL_HALFLIFE_32
+echo "[i] Enabling Mali G52 MC2 TLB optimizations..."
+set_opt CONFIG_MALI_EXPERT
+set_opt CONFIG_MALI_2MB_ALLOC
 
 # ----------------------------------------------------------------------------
 # TCP Network (BBR + FQ Pacing)
@@ -160,4 +174,4 @@ make O="$OUT_DIR" savedefconfig
 cp -v "$OUT_DIR/defconfig" "$DEFCONFIG_PATH"
 
 echo ""
-echo "✅ Done! daily.sh: BORE + RCU NOCB + BINDER_PAGES FIXED."
+echo "✅ Done! daily.sh: BORE + RCU NOCB + BFQ + G52 TLB + EAS tuned."
