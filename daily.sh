@@ -77,9 +77,6 @@ disable_opt CONFIG_MTK_SCHED_TRACERS
 disable_opt CONFIG_PELT_UTIL_HALFLIFE_16
 disable_opt CONFIG_PELT_UTIL_HALFLIFE_32
 
-# EAS migration cost otimizado para MT6769 big.LITTLE (4xA75 + 4xA55)
-# 500us: reduz migracoes desnecessarias sem travar tasks no cluster errado
-set_val CONFIG_SCHED_MIGRATION_COST 500000
 
 # ----------------------------------------------------------------------------
 # Binder IPC
