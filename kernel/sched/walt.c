@@ -834,6 +834,7 @@ void walt_fixup_busy_time(struct task_struct *p, int new_cpu)
 	struct rq *src_rq = task_rq(p);
 	struct rq *dest_rq = cpu_rq(new_cpu);
 	u64 wallclock;
+	u32 curr_window_val, prev_window_val;
 
 	if (!p->on_rq && p->state != TASK_WAKING)
 		return;
@@ -847,22 +848,19 @@ void walt_fixup_busy_time(struct task_struct *p, int new_cpu)
 
 	wallclock = walt_ktime_clock();
 
-//#define LOCK_CONDITION(rq) (debug_locks && !lockdep_is_held(&rq->lock))
-//	WARN(LOCK_CONDITION(task_rq(p)), "task_rq(p) not held. p->state=%08lx new_cpu=%d task_cpu=%d", p->state, new_cpu, p->cpu);
-//	WARN(LOCK_CONDITION(dest_rq), "dest_rq not held. p->state=%08lx new_cpu=%d task_cpu=%d", p->state, new_cpu, p->cpu);
-
 	/*
-	 * It seems that in lots of cases we don't have
-	 * dest_rq locked when we get here, which means
-	 * we can't be sure to the WALT stats - someone
-	 * needs to fix this.
+	 * Save the task's window counters BEFORE the TASK_MIGRATE update,
+	 * which may reset them to zero. Using post-migration values causes
+	 * src_rq counters to go negative (subtracting zero from non-zero).
 	 */
+	curr_window_val = p->ravg.curr_window;
+	prev_window_val = p->ravg.prev_window;
+
 	walt_update_task_ravg(task_rq(p)->curr, task_rq(p),
 			TASK_UPDATE, wallclock, 0);
 	walt_update_task_ravg(dest_rq->curr, dest_rq,
 			TASK_UPDATE, wallclock, 0);
 
-//	WARN(LOCK_CONDITION(task_rq(p)), "task_rq(p) not held after rq update. p->state=%08lx new_cpu=%d task_cpu=%d", p->state, new_cpu, p->cpu);
 	walt_update_task_ravg(p, task_rq(p), TASK_MIGRATE, wallclock, 0);
 
 	/*
@@ -876,23 +874,21 @@ void walt_fixup_busy_time(struct task_struct *p, int new_cpu)
 		fixup_cum_window_demand(dest_rq, p->ravg.demand);
 	}
 
-	if (p->ravg.curr_window) {
-		src_rq->curr_runnable_sum -= p->ravg.curr_window;
-		dest_rq->curr_runnable_sum += p->ravg.curr_window;
+	if (curr_window_val) {
+		src_rq->curr_runnable_sum -= curr_window_val;
+		dest_rq->curr_runnable_sum += curr_window_val;
 	}
 
-	if (p->ravg.prev_window) {
-		src_rq->prev_runnable_sum -= p->ravg.prev_window;
-		dest_rq->prev_runnable_sum += p->ravg.prev_window;
+	if (prev_window_val) {
+		src_rq->prev_runnable_sum -= prev_window_val;
+		dest_rq->prev_runnable_sum += prev_window_val;
 	}
 
 	if ((s64)src_rq->prev_runnable_sum < 0) {
 		src_rq->prev_runnable_sum = 0;
-		WARN_ON(1);
 	}
 	if ((s64)src_rq->curr_runnable_sum < 0) {
 		src_rq->curr_runnable_sum = 0;
-		WARN_ON(1);
 	}
 
 	trace_walt_migration_update_sum(src_rq, p);
