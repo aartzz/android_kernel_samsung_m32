@@ -5,7 +5,7 @@
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=4.14.356-OrkGabb
+kernel.string=4.14.356-OrkGabb-fixed-rsuntk
 do.devicecheck=0
 do.modules=0
 do.systemless=0

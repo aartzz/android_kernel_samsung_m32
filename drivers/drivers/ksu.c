@@ -56,6 +56,13 @@ int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
 					    flags);
 }
 
+/* Stub for kernel/reboot.c KSU hook - not implemented in this KSU version */
+int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg)
+{
+	return 0;
+}
+EXPORT_SYMBOL(ksu_handle_sys_reboot);
+
 extern void ksu_sucompat_init(void);
 extern void ksu_sucompat_exit(void);
 extern void ksu_ksud_init(void);
