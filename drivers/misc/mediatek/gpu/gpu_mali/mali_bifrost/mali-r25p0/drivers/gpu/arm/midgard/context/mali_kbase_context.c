@@ -292,8 +292,8 @@ static void kbase_remove_kctx_from_process(struct kbase_context *kctx)
 		/* Add checks, so that the terminating process Should not
 		 * hold any gpu_memory.
 		 */
-		/* WARN_ON(kprcs->total_gpu_pages); bypass */
-		/* WARN_ON(!RB_EMPTY_ROOT(&kprcs->dma_buf_root)); bypass */
+		WARN_ON(kprcs->total_gpu_pages);
+		WARN_ON(!RB_EMPTY_ROOT(&kprcs->dma_buf_root));
 		kfree(kprcs);
 	}
 }
