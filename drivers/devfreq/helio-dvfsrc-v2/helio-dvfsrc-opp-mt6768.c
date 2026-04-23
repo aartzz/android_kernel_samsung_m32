@@ -166,14 +166,14 @@ void dvfsrc_opp_level_mapping(void)
 		set_ddr_opp(VCORE_DVFS_OPP_5, DDR_OPP_0);
 		set_ddr_opp(VCORE_DVFS_OPP_6, DDR_OPP_0);
 		set_ddr_opp(VCORE_DVFS_OPP_7, DDR_OPP_0);
-		set_ddr_opp(VCORE_DVFS_OPP_8, DDR_OPP_0);
-		set_ddr_opp(VCORE_DVFS_OPP_9, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_10, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_11, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_12, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_13, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_14, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_15, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
+		set_ddr_opp(VCORE_DVFS_OPP_8, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_9, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_10, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_11, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_12, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_13, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_14, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_15, DDR_OPP_1);
 		break;
 	case SPMFW_LP3_1CH_1866:
 		set_vcore_opp(VCORE_DVFS_OPP_0, VCORE_OPP_0);
@@ -201,14 +201,14 @@ void dvfsrc_opp_level_mapping(void)
 		set_ddr_opp(VCORE_DVFS_OPP_5, DDR_OPP_0);
 		set_ddr_opp(VCORE_DVFS_OPP_6, DDR_OPP_0);
 		set_ddr_opp(VCORE_DVFS_OPP_7, DDR_OPP_0);
-		set_ddr_opp(VCORE_DVFS_OPP_8, DDR_OPP_0);
-		set_ddr_opp(VCORE_DVFS_OPP_9, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_10, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_11, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_12, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_13, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_14, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
-		set_ddr_opp(VCORE_DVFS_OPP_15, DDR_OPP_0 /* SYSARCH: DDR_OPP_0 Force */);
+		set_ddr_opp(VCORE_DVFS_OPP_8, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_9, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_10, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_11, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_12, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_13, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_14, DDR_OPP_1);
+		set_ddr_opp(VCORE_DVFS_OPP_15, DDR_OPP_1);
 		break;
 	default:
 		set_vcore_opp(VCORE_DVFS_OPP_0, VCORE_OPP_UNREQ);
