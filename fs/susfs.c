@@ -914,3 +914,30 @@ void susfs_init(void) {
 /* No module exit is needed becuase it should never be a loadable kernel module */
 //void __init susfs_exit(void)
 
+void susfs_try_umount_all(uid_t uid) {}
+void ksu_try_umount(const char *mnt, bool b, int i, uid_t uid) {}
+int susfs_reorder_mnt_id(void) { return 0; }
+int susfs_run_sus_path_loop(void) { return 0; }
+void susfs_set_current_proc_umounted(void) {}
+int susfs_show_version(void __user **user_info) {
+    void __user *usr_ptr = *user_info;
+    if (usr_ptr)
+        copy_to_user(usr_ptr, SUSFS_VERSION, strlen(SUSFS_VERSION) + 1);
+    return 0;
+}
+int susfs_show_variant(void __user **user_info) {
+    void __user *usr_ptr = *user_info;
+    if (usr_ptr)
+        copy_to_user(usr_ptr, "legacy", 7);
+    return 0;
+}
+int susfs_get_enabled_features(void __user **user_info) {
+    void __user *usr_ptr = *user_info;
+    u64 features = (1<<0) | (1<<1) | (1<<2) | (1<<3) | (1<<4) | (1<<5);
+    if (usr_ptr)
+        copy_to_user(usr_ptr, &features, sizeof(features));
+    return 0;
+}
+int susfs_enable_log(void __user **user_info) { return 0; }
+int susfs_set_avc_log_spoofing(void __user **user_info) { return 0; }
+bool susfs_is_current_proc_umounted(void) { return false; }

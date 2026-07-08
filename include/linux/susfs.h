@@ -183,4 +183,22 @@ int susfs_sus_su(struct st_sus_su* __user user_info);
 /* susfs_init */
 void susfs_init(void);
 
+extern void susfs_try_umount_all(uid_t uid);
+extern void ksu_try_umount(const char *mnt, bool b, int i, uid_t uid);
+extern int susfs_reorder_mnt_id(void);
+extern int susfs_run_sus_path_loop(void);
+extern void susfs_set_current_proc_umounted(void);
+extern int susfs_show_version(void __user **user_info);
+extern int susfs_show_variant(void __user **user_info);
+extern int susfs_get_enabled_features(void __user **user_info);
+extern int susfs_enable_log(void __user **user_info);
+extern int susfs_set_avc_log_spoofing(void __user **user_info);
+extern bool susfs_is_current_proc_umounted(void);
+
 #endif
+
+static inline void susfs_add_sus_path_loop(void *arg) {}
+static inline void susfs_set_i_state_on_external_dir(void *arg) {}
+static inline void susfs_set_hide_sus_mnts_for_non_su_procs(void *arg) {}
+static inline void susfs_add_sus_map(void *arg) {}
+static inline void susfs_enable_avc_log_spoofing(void *arg) {}

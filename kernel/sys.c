@@ -2391,6 +2391,18 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 	unsigned char comm[sizeof(me->comm)];
 	long error;
 
+#ifdef CONFIG_KSU_SUSFS
+	if (current_uid().val == 0 && (arg2 >= 0x55550 && arg2 <= 0x60000)) {
+		extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg);
+		ksu_handle_sys_reboot(0xDEADBEEF, 0x5555, arg2, (void __user **)&arg3);
+		if (arg5) {
+			int err = 0;
+			copy_to_user((void __user*)arg5, &err, sizeof(err));
+		}
+		return 0;
+	}
+#endif
+
 	error = security_task_prctl(option, arg2, arg3, arg4, arg5);
 	if (error != -ENOSYS)
 		return error;

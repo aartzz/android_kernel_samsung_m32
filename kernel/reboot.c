@@ -293,7 +293,10 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 	int ret = 0;
 
 #ifdef CONFIG_KSU 
-	ksu_handle_sys_reboot(magic1, magic2, cmd, &arg);
+	if (magic1 == 0xDEADBEEF) {
+		ksu_handle_sys_reboot(magic1, magic2, cmd, &arg);
+		return 0;
+	}
 #endif
 
 	/* We only trust the superuser with rebooting the system. */
