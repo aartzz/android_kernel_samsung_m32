@@ -19,7 +19,7 @@ ork/
 clang*/
 toolchain*/
 out/
-AnyKernel*/
+# AnyKernel*/
 *.zip
 *.tar.*
 *.patch
