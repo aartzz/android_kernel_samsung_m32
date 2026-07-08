@@ -21,6 +21,8 @@
 #include <linux/blk-mq.h>
 #include <linux/mount.h>
 #include <linux/dax.h>
+#include <linux/bio.h>
+#include <linux/keyslot-manager.h>
 
 #define DM_MSG_PREFIX "table"
 
@@ -187,7 +189,12 @@ static int alloc_targets(struct dm_table *t, unsigned int num)
 int dm_table_create(struct dm_table **result, fmode_t mode,
 		    unsigned num_targets, struct mapped_device *md)
 {
-	struct dm_table *t = kzalloc(sizeof(*t), GFP_KERNEL);
+	struct dm_table *t;
+
+	if (num_targets > DM_MAX_TARGETS)
+		return -EOVERFLOW;
+
+	t = kzalloc(sizeof(*t), GFP_KERNEL);
 
 	if (!t)
 		return -ENOMEM;
@@ -202,7 +209,7 @@ int dm_table_create(struct dm_table **result, fmode_t mode,
 
 	if (!num_targets) {
 		kfree(t);
-		return -ENOMEM;
+		return -EOVERFLOW;
 	}
 
 	if (alloc_targets(t, num_targets)) {
@@ -416,6 +423,29 @@ dev_t dm_get_dev_t(const char *path)
 	else {
 		dev = bdev->bd_dev;
 		bdput(bdev);
+	}
+
+	if (!dev) {
+		unsigned int wait_time_ms = 0;
+
+		DMERR("%s: retry %s\n", __func__, path);
+		while (driver_probe_done() != 0 || dev == 0) {
+			msleep(100);
+			wait_time_ms += 100;
+			if (wait_time_ms > DM_WAIT_DEV_MAX_TIME) {
+				DMERR("%s: retry timeout(%dms)\n", __func__,
+					DM_WAIT_DEV_MAX_TIME);
+				DMERR("no dev found for %s", path);
+				return 0;
+			}
+			bdev = lookup_bdev(path);
+			if (IS_ERR(bdev))
+				dev = name_to_dev_t(path);
+			else {
+				dev = bdev->bd_dev;
+				bdput(bdev);
+			}
+		}
 	}
 
 	return dev;
@@ -1622,6 +1652,54 @@ static void dm_table_verify_integrity(struct dm_table *t)
 	}
 }
 
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+static int device_intersect_crypto_modes(struct dm_target *ti,
+					 struct dm_dev *dev, sector_t start,
+					 sector_t len, void *data)
+{
+	struct keyslot_manager *parent = data;
+	struct keyslot_manager *child = bdev_get_queue(dev->bdev)->ksm;
+
+	keyslot_manager_intersect_modes(parent, child);
+	return 0;
+}
+
+/*
+ * Update the inline crypto modes supported by 'q->ksm' to be the intersection
+ * of the modes supported by all targets in the table.
+ *
+ * For any mode to be supported at all, all targets must have explicitly
+ * declared that they can pass through inline crypto support.  For a particular
+ * mode to be supported, all underlying devices must also support it.
+ *
+ * Assume that 'q->ksm' initially declares all modes to be supported.
+ */
+static void dm_calculate_supported_crypto_modes(struct dm_table *t,
+						struct request_queue *q)
+{
+	struct dm_target *ti;
+	unsigned int i;
+
+	for (i = 0; i < dm_table_get_num_targets(t); i++) {
+		ti = dm_table_get_target(t, i);
+
+		if (!ti->may_passthrough_inline_crypto) {
+			keyslot_manager_intersect_modes(q->ksm, NULL);
+			return;
+		}
+		if (!ti->type->iterate_devices)
+			continue;
+		ti->type->iterate_devices(ti, device_intersect_crypto_modes,
+					  q->ksm);
+	}
+}
+#else /* CONFIG_BLK_INLINE_ENCRYPTION */
+static inline void dm_calculate_supported_crypto_modes(struct dm_table *t,
+						       struct request_queue *q)
+{
+}
+#endif /* !CONFIG_BLK_INLINE_ENCRYPTION */
+
 static int device_flush_capable(struct dm_target *ti, struct dm_dev *dev,
 				sector_t start, sector_t len, void *data)
 {
@@ -1815,6 +1893,10 @@ void dm_table_set_restrictions(struct dm_table *t, struct request_queue *q,
 	}
 	blk_queue_write_cache(q, wc, fua);
 
+	/* Inherit inline-crypt capability of underlying devices. */
+	if (dm_table_supports_flush(t, (1UL << QUEUE_FLAG_INLINECRYPT)))
+		queue_flag_set_unlocked(QUEUE_FLAG_INLINECRYPT, q);
+
 	if (dm_table_supports_dax(t))
 		queue_flag_set_unlocked(QUEUE_FLAG_DAX, q);
 	else
@@ -1840,6 +1922,8 @@ void dm_table_set_restrictions(struct dm_table *t, struct request_queue *q,
 		queue_flag_clear_unlocked(QUEUE_FLAG_NO_SG_MERGE, q);
 
 	dm_table_verify_integrity(t);
+
+	dm_calculate_supported_crypto_modes(t, q);
 
 	/*
 	 * Some devices don't use blk_integrity but still want stable pages
@@ -1875,6 +1959,9 @@ void dm_table_set_restrictions(struct dm_table *t, struct request_queue *q,
 	smp_mb();
 	if (dm_table_request_based(t))
 		queue_flag_set_unlocked(QUEUE_FLAG_STACKABLE, q);
+
+	/* io_pages is used for readahead */
+	q->backing_dev_info->io_pages = limits->max_sectors >> (PAGE_SHIFT - 9);
 }
 
 unsigned int dm_table_get_num_targets(struct dm_table *t)

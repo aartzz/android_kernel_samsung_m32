@@ -87,7 +87,6 @@ static int ceph_set_page_dirty(struct page *page)
 
 	/* dirty the head */
 	spin_lock(&ci->i_ceph_lock);
-	BUG_ON(ci->i_wr_ref == 0); // caller should hold Fw reference
 	if (__ceph_have_pending_cap_snap(ci)) {
 		struct ceph_cap_snap *capsnap =
 				list_last_entry(&ci->i_cap_snaps,
@@ -862,15 +861,10 @@ retry:
 		max_pages = wsize >> PAGE_SHIFT;
 
 get_more_pages:
-		pvec_pages = min_t(unsigned, PAGEVEC_SIZE,
-				   max_pages - locked_pages);
-		if (end - index < (u64)(pvec_pages - 1))
-			pvec_pages = (unsigned)(end - index) + 1;
-
-		pvec_pages = pagevec_lookup_tag(&pvec, mapping, &index,
-						PAGECACHE_TAG_DIRTY,
-						pvec_pages);
-		dout("pagevec_lookup_tag got %d\n", pvec_pages);
+		pvec_pages = pagevec_lookup_range_nr_tag(&pvec, mapping, &index,
+						end, PAGECACHE_TAG_DIRTY,
+						max_pages - locked_pages);
+		dout("pagevec_lookup_range_tag got %d\n", pvec_pages);
 		if (!pvec_pages && !locked_pages)
 			break;
 		for (i = 0; i < pvec_pages && locked_pages < max_pages; i++) {
@@ -887,16 +881,6 @@ get_more_pages:
 				dout("!dirty or !mapping %p\n", page);
 				unlock_page(page);
 				continue;
-			}
-			if (page->index > end) {
-				dout("end of range %p\n", page);
-				/* can't be range_cyclic (1st pass) because
-				 * end == -1 in that case. */
-				stop = true;
-				if (ceph_wbc.head_snapc)
-					done = true;
-				unlock_page(page);
-				break;
 			}
 			if (strip_unit_end && (page->index > strip_unit_end)) {
 				dout("end of strip unit %p\n", page);
@@ -1169,8 +1153,7 @@ release_pvec_pages:
 			index = 0;
 			while ((index <= end) &&
 			       (nr = pagevec_lookup_tag(&pvec, mapping, &index,
-							PAGECACHE_TAG_WRITEBACK,
-							PAGEVEC_SIZE))) {
+						PAGECACHE_TAG_WRITEBACK))) {
 				for (i = 0; i < nr; i++) {
 					page = pvec.pages[i];
 					if (page_snap_context(page) != snapc)
@@ -1797,6 +1780,9 @@ out:
 static const struct vm_operations_struct ceph_vmops = {
 	.fault		= ceph_filemap_fault,
 	.page_mkwrite	= ceph_page_mkwrite,
+#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
+	.suitable_for_spf = true,
+#endif
 };
 
 int ceph_mmap(struct file *file, struct vm_area_struct *vma)

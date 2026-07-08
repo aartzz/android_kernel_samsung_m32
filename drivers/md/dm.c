@@ -25,6 +25,8 @@
 #include <linux/delay.h>
 #include <linux/wait.h>
 #include <linux/pr.h>
+#include <linux/blk-crypto.h>
+#include <linux/keyslot-manager.h>
 
 #define DM_MSG_PREFIX "core"
 
@@ -1252,9 +1254,10 @@ static int clone_bio(struct dm_target_io *tio, struct bio *bio,
 
 	__bio_clone_fast(clone, bio);
 
+	bio_crypt_clone(clone, bio, GFP_NOIO);
+
 	if (unlikely(bio_integrity(bio) != NULL)) {
 		int r;
-
 		if (unlikely(!dm_target_has_integrity(tio->ti->type) &&
 			     !dm_target_passes_integrity(tio->ti->type))) {
 			DMWARN("%s: the target %s doesn't support integrity data.",
@@ -1664,6 +1667,8 @@ void dm_init_normal_md_queue(struct mapped_device *md)
 	md->queue->backing_dev_info->congested_fn = dm_any_congested;
 }
 
+static void dm_destroy_inline_encryption(struct request_queue *q);
+
 static void cleanup_mapped_device(struct mapped_device *md)
 {
 	if (md->wq)
@@ -1688,8 +1693,10 @@ static void cleanup_mapped_device(struct mapped_device *md)
 		put_disk(md->disk);
 	}
 
-	if (md->queue)
+	if (md->queue) {
+		dm_destroy_inline_encryption(md->queue);
 		blk_cleanup_queue(md->queue);
+	}
 
 	cleanup_srcu_struct(&md->io_barrier);
 
@@ -2040,6 +2047,174 @@ struct queue_limits *dm_get_queue_limits(struct mapped_device *md)
 }
 EXPORT_SYMBOL_GPL(dm_get_queue_limits);
 
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+struct dm_keyslot_evict_args {
+	const struct blk_crypto_key *key;
+	int err;
+};
+
+static int dm_keyslot_evict_callback(struct dm_target *ti, struct dm_dev *dev,
+				     sector_t start, sector_t len, void *data)
+{
+	struct dm_keyslot_evict_args *args = data;
+	int err;
+
+	/* set lock subclass to avoid lockdep wrong detect */
+	if (dev->bdev->bd_queue->ksm)
+		blk_crypto_flock(dev->bdev->bd_queue->ksm, SINGLE_DEPTH_NESTING);
+
+	err = blk_crypto_evict_key(dev->bdev->bd_queue, args->key);
+	if (!args->err)
+		args->err = err;
+	/* Always try to evict the key from all devices. */
+	return 0;
+}
+
+/*
+ * When an inline encryption key is evicted from a device-mapper device, evict
+ * it from all the underlying devices.
+ */
+static int dm_keyslot_evict(struct keyslot_manager *ksm,
+			    const struct blk_crypto_key *key, unsigned int slot)
+{
+	struct mapped_device *md = keyslot_manager_private(ksm);
+	struct dm_keyslot_evict_args args = { key };
+	struct dm_table *t;
+	int srcu_idx;
+	int i;
+	struct dm_target *ti;
+
+	t = dm_get_live_table(md, &srcu_idx);
+	if (!t)
+		return 0;
+	for (i = 0; i < dm_table_get_num_targets(t); i++) {
+		ti = dm_table_get_target(t, i);
+		if (!ti->type->iterate_devices)
+			continue;
+		ti->type->iterate_devices(ti, dm_keyslot_evict_callback, &args);
+	}
+	dm_put_live_table(md, srcu_idx);
+	return args.err;
+}
+
+struct dm_derive_raw_secret_args {
+	const u8 *wrapped_key;
+	unsigned int wrapped_key_size;
+	u8 *secret;
+	unsigned int secret_size;
+	int err;
+};
+
+static int dm_derive_raw_secret_callback(struct dm_target *ti,
+					 struct dm_dev *dev, sector_t start,
+					 sector_t len, void *data)
+{
+	struct dm_derive_raw_secret_args *args = data;
+	struct request_queue *q = dev->bdev->bd_queue;
+
+	if (!args->err)
+		return 0;
+
+	if (!q->ksm) {
+		args->err = -EOPNOTSUPP;
+		return 0;
+	}
+
+	/* set lock subclass to avoid lockdep wrong detect */
+	if (dev->bdev->bd_queue->ksm)
+		blk_crypto_flock(dev->bdev->bd_queue->ksm, SINGLE_DEPTH_NESTING);
+
+	args->err = keyslot_manager_derive_raw_secret(q->ksm, args->wrapped_key,
+						args->wrapped_key_size,
+						args->secret,
+						args->secret_size);
+	/* Try another device in case this fails. */
+	return 0;
+}
+
+/*
+ * Retrieve the raw_secret from the underlying device. Given that
+ * only only one raw_secret can exist for a particular wrappedkey,
+ * retrieve it only from the first device that supports derive_raw_secret()
+ */
+static int dm_derive_raw_secret(struct keyslot_manager *ksm,
+				const u8 *wrapped_key,
+				unsigned int wrapped_key_size,
+				u8 *secret, unsigned int secret_size)
+{
+	struct mapped_device *md = keyslot_manager_private(ksm);
+	struct dm_derive_raw_secret_args args = {
+		.wrapped_key = wrapped_key,
+		.wrapped_key_size = wrapped_key_size,
+		.secret = secret,
+		.secret_size = secret_size,
+		.err = -EOPNOTSUPP,
+	};
+	struct dm_table *t;
+	int srcu_idx;
+	int i;
+	struct dm_target *ti;
+
+	t = dm_get_live_table(md, &srcu_idx);
+	if (!t)
+		return -EOPNOTSUPP;
+	for (i = 0; i < dm_table_get_num_targets(t); i++) {
+		ti = dm_table_get_target(t, i);
+		if (!ti->type->iterate_devices)
+			continue;
+		ti->type->iterate_devices(ti, dm_derive_raw_secret_callback,
+					  &args);
+		if (!args.err)
+			break;
+	}
+	dm_put_live_table(md, srcu_idx);
+	return args.err;
+}
+
+static struct keyslot_mgmt_ll_ops dm_ksm_ll_ops = {
+	.keyslot_evict = dm_keyslot_evict,
+	.derive_raw_secret = dm_derive_raw_secret,
+};
+
+static int dm_init_inline_encryption(struct mapped_device *md)
+{
+	unsigned int features;
+	unsigned int mode_masks[BLK_ENCRYPTION_MODE_MAX];
+
+	/*
+	 * Initially declare support for all crypto settings.  Anything
+	 * unsupported by a child device will be removed later when calculating
+	 * the device restrictions.
+	 */
+	features = BLK_CRYPTO_FEATURE_STANDARD_KEYS |
+		   BLK_CRYPTO_FEATURE_WRAPPED_KEYS;
+	memset(mode_masks, 0xFF, sizeof(mode_masks));
+
+	md->queue->ksm = keyslot_manager_create_passthrough(NULL,
+							    &dm_ksm_ll_ops,
+							    features,
+							    mode_masks, md);
+	if (!md->queue->ksm)
+		return -ENOMEM;
+	return 0;
+}
+
+static void dm_destroy_inline_encryption(struct request_queue *q)
+{
+	keyslot_manager_destroy(q->ksm);
+	q->ksm = NULL;
+}
+#else /* CONFIG_BLK_INLINE_ENCRYPTION */
+static inline int dm_init_inline_encryption(struct mapped_device *md)
+{
+	return 0;
+}
+
+static inline void dm_destroy_inline_encryption(struct request_queue *q)
+{
+}
+#endif /* !CONFIG_BLK_INLINE_ENCRYPTION */
+
 /*
  * Setup the DM device's queue based on md's type
  */
@@ -2076,6 +2251,12 @@ int dm_setup_md_queue(struct mapped_device *md, struct dm_table *t)
 	case DM_TYPE_NONE:
 		WARN_ON_ONCE(true);
 		break;
+	}
+
+	r = dm_init_inline_encryption(md);
+	if (r) {
+		DMERR("Cannot initialize inline encryption");
+		return r;
 	}
 
 	return 0;
@@ -2223,7 +2404,7 @@ static int dm_wait_for_completion(struct mapped_device *md, long task_state)
 			break;
 
 		if (signal_pending_state(task_state, current)) {
-			r = -EINTR;
+			r = -ERESTARTSYS;
 			break;
 		}
 
@@ -2600,6 +2781,9 @@ static void __dm_internal_suspend(struct mapped_device *md, unsigned suspend_fla
 
 static void __dm_internal_resume(struct mapped_device *md)
 {
+	int r;
+	struct dm_table *map;
+
 	BUG_ON(!md->internal_suspend_count);
 
 	if (--md->internal_suspend_count)
@@ -2608,12 +2792,23 @@ static void __dm_internal_resume(struct mapped_device *md)
 	if (dm_suspended_md(md))
 		goto done; /* resume from nested suspend */
 
-	/*
-	 * NOTE: existing callers don't need to call dm_table_resume_targets
-	 * (which may fail -- so best to avoid it for now by passing NULL map)
-	 */
-	(void) __dm_resume(md, NULL);
-
+	map = rcu_dereference_protected(md->map, lockdep_is_held(&md->suspend_lock));
+	r = __dm_resume(md, map);
+	if (r) {
+		/*
+		 * If a preresume method of some target failed, we are in a
+		 * tricky situation. We can't return an error to the caller. We
+		 * can't fake success because then the "resume" and
+		 * "postsuspend" methods would not be paired correctly, and it
+		 * would break various targets, for example it would cause list
+		 * corruption in the "origin" target.
+		 *
+		 * So, we fake normal suspend here, to make sure that the
+		 * "resume" and "postsuspend" methods will be paired correctly.
+		 */
+		DMERR("Preresume method failed: %d", r);
+		set_bit(DMF_SUSPENDED, &md->flags);
+	}
 done:
 	clear_bit(DMF_SUSPENDED_INTERNALLY, &md->flags);
 	smp_mb__after_atomic();

@@ -739,7 +739,7 @@ void qdisc_tree_reduce_backlog(struct Qdisc *sch, unsigned int n,
 	drops = max_t(int, n, 0);
 	rcu_read_lock();
 	while ((parentid = sch->parent)) {
-		if (TC_H_MAJ(parentid) == TC_H_MAJ(TC_H_INGRESS))
+		if (parentid == TC_H_ROOT)
 			break;
 
 		if (sch->flags & TCQ_F_NOPARENT)
@@ -1299,6 +1299,34 @@ static int tc_get_qdisc(struct sk_buff *skb, struct nlmsghdr *n,
 	return 0;
 }
 
+/*
+ * enable/disable flow on qdisc.
+ */
+void
+tc_qdisc_flow_control(struct net_device *dev, u32 tcm_handle, int enable_flow)
+{
+	struct Qdisc *q;
+	struct __qdisc_change_req {
+		struct nlattr attr;
+		struct tc_prio_qopt data;
+	} req =	{
+		.attr = {sizeof(struct __qdisc_change_req), TCA_OPTIONS},
+		.data = {3, {1, 2, 2, 2, 1, 2, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1}, 1}
+		};
+
+	/* override flow bit */
+	req.data.enable_flow = enable_flow;
+
+	/* look up using tcm handle */
+	q = qdisc_lookup(dev, tcm_handle);
+
+	/* call registered change function */
+	if (q) {
+		if (q->ops->change(q, &(req.attr)) != 0)
+			pr_err("tc_qdisc_flow_control: qdisc change failed");
+	}
+}
+EXPORT_SYMBOL(tc_qdisc_flow_control);
 /*
  * Create/change qdisc.
  */

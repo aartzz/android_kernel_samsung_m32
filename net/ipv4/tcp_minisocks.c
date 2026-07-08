@@ -378,7 +378,7 @@ void tcp_openreq_init_rwin(struct request_sock *req,
 		full_space = rcv_wnd * mss;
 
 	/* tcp_full_space because it is guaranteed to be the first packet */
-	tcp_select_initial_window(full_space,
+	tcp_select_initial_window(sock_net(sk_listener), full_space,
 		mss - (ireq->tstamp_ok ? TCPOLEN_TSTAMP_ALIGNED : 0),
 		&req->rsk_rcv_wnd,
 		&req->rsk_window_clamp,
@@ -564,7 +564,7 @@ EXPORT_SYMBOL(tcp_create_openreq_child);
 
 struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 			   struct request_sock *req,
-			   bool fastopen)
+			   bool fastopen, bool *req_stolen)
 {
 	struct tcp_options_received tmp_opt;
 	struct sock *child;
@@ -771,6 +771,7 @@ struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 
 	sock_rps_save_rxhash(child, skb);
 	tcp_synack_rtt_meas(child, req);
+	*req_stolen = !own_req;
 	return inet_csk_complete_hashdance(sk, child, req, own_req);
 
 listen_overflow:

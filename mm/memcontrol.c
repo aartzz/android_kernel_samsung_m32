@@ -1747,6 +1747,9 @@ static void drain_stock(struct memcg_stock_pcp *stock)
 {
 	struct mem_cgroup *old = stock->cached;
 
+	if (!old)
+		return;
+
 	if (stock->nr_pages) {
 		page_counter_uncharge(&old->memory, stock->nr_pages);
 		if (do_memsw_account())
@@ -1754,6 +1757,8 @@ static void drain_stock(struct memcg_stock_pcp *stock)
 		css_put_many(&old->css, stock->nr_pages);
 		stock->nr_pages = 0;
 	}
+
+	css_put(&old->css);
 	stock->cached = NULL;
 }
 
@@ -1789,6 +1794,7 @@ static void refill_stock(struct mem_cgroup *memcg, unsigned int nr_pages)
 	stock = this_cpu_ptr(&memcg_stock);
 	if (stock->cached != memcg) { /* reset if necessary */
 		drain_stock(stock);
+		css_get(&memcg->css);
 		stock->cached = memcg;
 	}
 	stock->nr_pages += nr_pages;
@@ -1820,21 +1826,22 @@ static void drain_all_stock(struct mem_cgroup *root_memcg)
 	for_each_online_cpu(cpu) {
 		struct memcg_stock_pcp *stock = &per_cpu(memcg_stock, cpu);
 		struct mem_cgroup *memcg;
+		bool flush = false;
 
+		rcu_read_lock();
 		memcg = stock->cached;
-		if (!memcg || !stock->nr_pages || !css_tryget(&memcg->css))
-			continue;
-		if (!mem_cgroup_is_descendant(memcg, root_memcg)) {
-			css_put(&memcg->css);
-			continue;
-		}
-		if (!test_and_set_bit(FLUSHING_CACHED_CHARGE, &stock->flags)) {
+		if (memcg && stock->nr_pages &&
+		    mem_cgroup_is_descendant(memcg, root_memcg))
+			flush = true;
+		rcu_read_unlock();
+
+		if (flush &&
+		    !test_and_set_bit(FLUSHING_CACHED_CHARGE, &stock->flags)) {
 			if (cpu == curcpu)
 				drain_local_stock(&stock->work);
 			else
 				schedule_work_on(cpu, &stock->work);
 		}
-		css_put(&memcg->css);
 	}
 	put_cpu();
 	mutex_unlock(&percpu_charge_mutex);
@@ -2798,6 +2805,43 @@ static void tree_events(struct mem_cgroup *memcg, unsigned long *events)
 	}
 }
 
+#ifdef CONFIG_MEMCG_HEIMDALL
+static ssize_t mem_cgroup_force_shrink_write(struct kernfs_open_file *of,
+					    char *buf, size_t nbytes,
+					    loff_t off)
+{
+	int type;
+	unsigned long size;
+	char *str;
+	int ret = -EINVAL;
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+
+	if (mem_cgroup_is_root(memcg))
+		goto error;
+
+	buf = strstrip(buf);
+	str = strchr(buf, ',');
+	if (str == NULL)
+		goto error;
+
+	*str = '\0';
+	ret = kstrtoul(str+1, 10, &size);
+	if (ret)
+		goto error;
+
+	ret = kstrtoint(buf, 10, &type);
+	if (ret)
+		goto error;
+
+	if (type > 0 && type <= MEMCG_HEIMDALL_SHRINK_FILE)
+		forced_shrink_node_memcg(NODE_DATA(0), memcg, type, size / PAGE_SIZE);
+
+error:
+	return ret ?: nbytes;
+}
+#endif
+
+#ifndef CONFIG_MTK_GMO_RAM_OPTIMIZE
 static unsigned long mem_cgroup_usage(struct mem_cgroup *memcg, bool swap)
 {
 	unsigned long val = 0;
@@ -2812,13 +2856,55 @@ static unsigned long mem_cgroup_usage(struct mem_cgroup *memcg, bool swap)
 				val += memcg_page_state(iter, MEMCG_SWAP);
 		}
 	} else {
+#ifdef CONFIG_MEMCG_HEIMDALL
+		val = memcg_page_state(memcg, MEMCG_RSS);
+		if (swap)
+			val += memcg_page_state(memcg, MEMCG_SWAP);
+#else
 		if (!swap)
 			val = page_counter_read(&memcg->memory);
 		else
 			val = page_counter_read(&memcg->memsw);
+#endif
 	}
 	return val;
 }
+#else
+static unsigned long mem_cgroup_usage(struct mem_cgroup *memcg, bool swap)
+{
+	unsigned long val;
+
+	if (mem_cgroup_is_root(memcg)) {
+		/*
+		 * For root memcg, using the following statistics to
+		 * evaluate "memory" & "memsw". This can help reduce
+		 * the CPU loading when iterating mem_cgroup_tree.
+		 */
+		val = global_node_page_state(NR_INACTIVE_ANON) +
+		      global_node_page_state(NR_ACTIVE_ANON) +
+		      global_node_page_state(NR_INACTIVE_FILE) +
+		      global_node_page_state(NR_ACTIVE_FILE) +
+		      global_node_page_state(NR_UNEVICTABLE);
+		if (swap) {
+			val += total_swap_pages -
+			       get_nr_swap_pages() -
+			       total_swapcache_pages();
+		}
+	} else {
+#ifdef CONFIG_MEMCG_HEIMDALL
+		val = memcg_page_state(memcg, MEMCG_RSS);
+		if (swap)
+			val += memcg_page_state(memcg, MEMCG_SWAP);
+#else
+		if (!swap)
+			val = page_counter_read(&memcg->memory);
+		else
+			val = page_counter_read(&memcg->memsw);
+#endif
+	}
+	return val;
+}
+#endif
 
 enum {
 	RES_USAGE,
@@ -3304,8 +3390,10 @@ static int mem_cgroup_swappiness_write(struct cgroup_subsys_state *css,
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
 
+#ifndef CONFIG_MTK_GMO_RAM_OPTIMIZE
 	if (val > 100)
 		return -EINVAL;
+#endif
 
 	if (css->parent)
 		memcg->swappiness = val;
@@ -3891,9 +3979,12 @@ static ssize_t memcg_write_event_control(struct kernfs_open_file *of,
 	buf = endp + 1;
 
 	cfd = simple_strtoul(buf, &endp, 10);
-	if ((*endp != ' ') && (*endp != '\0'))
+	if (*endp == '\0')
+		buf = endp;
+	else if (*endp == ' ')
+		buf = endp + 1;
+	else
 		return -EINVAL;
-	buf = endp + 1;
 
 	event = kzalloc(sizeof(*event), GFP_KERNEL);
 	if (!event)
@@ -4083,6 +4174,12 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.seq_show = memcg_numa_stat_show,
 	},
 #endif
+#ifdef CONFIG_MEMCG_HEIMDALL
+	{
+		.name = "force_shrink",
+		.write = mem_cgroup_force_shrink_write,
+	},
+#endif
 	{
 		.name = "kmem.limit_in_bytes",
 		.private = MEMFILE_PRIVATE(_KMEM, RES_LIMIT),
@@ -4265,6 +4362,8 @@ static void __mem_cgroup_free(struct mem_cgroup *memcg)
 	for_each_node(node)
 		free_mem_cgroup_per_node_info(memcg, node);
 	free_percpu(memcg->stat_cpu);
+	/* poison memcg before freeing it */
+	memset(memcg, 0x78, sizeof(struct mem_cgroup));
 	kfree(memcg);
 }
 
@@ -6332,6 +6431,13 @@ static struct cftype memsw_cgroup_files[] = {
 	{ },	/* terminate */
 };
 
+/*
+ * If mem_cgroup_swap_init() is implemented as a subsys_initcall()
+ * instead of a core_initcall(), this could mean cgroup_memory_noswap still
+ * remains set to false even when memcg is disabled via "cgroup_disable=memory"
+ * boot parameter. This may result in premature OOPS inside
+ * mem_cgroup_get_nr_swap_pages() function in corner cases.
+ */
 static int __init mem_cgroup_swap_init(void)
 {
 	if (!mem_cgroup_disabled() && really_do_swap_account) {
@@ -6343,6 +6449,6 @@ static int __init mem_cgroup_swap_init(void)
 	}
 	return 0;
 }
-subsys_initcall(mem_cgroup_swap_init);
+core_initcall(mem_cgroup_swap_init);
 
 #endif /* CONFIG_MEMCG_SWAP */

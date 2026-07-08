@@ -1690,13 +1690,13 @@ static const struct bpf_func_proto bpf_csum_update_proto = {
 
 static inline int __bpf_rx_skb(struct net_device *dev, struct sk_buff *skb)
 {
-	return dev_forward_skb(dev, skb);
+	return dev_forward_skb_nomtu(dev, skb);
 }
 
 static inline int __bpf_rx_skb_no_mac(struct net_device *dev,
 				      struct sk_buff *skb)
 {
-	int ret = ____dev_forward_skb(dev, skb);
+	int ret = ____dev_forward_skb(dev, skb, false);
 
 	if (likely(!ret)) {
 		skb->dev = dev;
@@ -2101,6 +2101,10 @@ static int bpf_skb_proto_4_to_6(struct sk_buff *skb)
 	u32 off = skb_mac_header_len(skb);
 	int ret;
 
+	/* SCTP uses GSO_BY_FRAGS, thus cannot adjust it. */
+	if (skb_is_gso(skb) && unlikely(skb_is_gso_sctp(skb)))
+		return -ENOTSUPP;
+
 	ret = skb_cow(skb, len_diff);
 	if (unlikely(ret < 0))
 		return ret;
@@ -2110,19 +2114,21 @@ static int bpf_skb_proto_4_to_6(struct sk_buff *skb)
 		return ret;
 
 	if (skb_is_gso(skb)) {
+		struct skb_shared_info *shinfo = skb_shinfo(skb);
+
 		/* SKB_GSO_TCPV4 needs to be changed into
 		 * SKB_GSO_TCPV6.
 		 */
-		if (skb_shinfo(skb)->gso_type & SKB_GSO_TCPV4) {
-			skb_shinfo(skb)->gso_type &= ~SKB_GSO_TCPV4;
-			skb_shinfo(skb)->gso_type |=  SKB_GSO_TCPV6;
+		if (shinfo->gso_type & SKB_GSO_TCPV4) {
+			shinfo->gso_type &= ~SKB_GSO_TCPV4;
+			shinfo->gso_type |=  SKB_GSO_TCPV6;
 		}
 
 		/* Due to IPv6 header, MSS needs to be downgraded. */
-		skb_shinfo(skb)->gso_size -= len_diff;
+		skb_decrease_gso_size(shinfo, len_diff);
 		/* Header must be checked, and gso_segs recomputed. */
-		skb_shinfo(skb)->gso_type |= SKB_GSO_DODGY;
-		skb_shinfo(skb)->gso_segs = 0;
+		shinfo->gso_type |= SKB_GSO_DODGY;
+		shinfo->gso_segs = 0;
 	}
 
 	skb->protocol = htons(ETH_P_IPV6);
@@ -2137,6 +2143,10 @@ static int bpf_skb_proto_6_to_4(struct sk_buff *skb)
 	u32 off = skb_mac_header_len(skb);
 	int ret;
 
+	/* SCTP uses GSO_BY_FRAGS, thus cannot adjust it. */
+	if (skb_is_gso(skb) && unlikely(skb_is_gso_sctp(skb)))
+		return -ENOTSUPP;
+
 	ret = skb_unclone(skb, GFP_ATOMIC);
 	if (unlikely(ret < 0))
 		return ret;
@@ -2146,19 +2156,21 @@ static int bpf_skb_proto_6_to_4(struct sk_buff *skb)
 		return ret;
 
 	if (skb_is_gso(skb)) {
+		struct skb_shared_info *shinfo = skb_shinfo(skb);
+
 		/* SKB_GSO_TCPV6 needs to be changed into
 		 * SKB_GSO_TCPV4.
 		 */
-		if (skb_shinfo(skb)->gso_type & SKB_GSO_TCPV6) {
-			skb_shinfo(skb)->gso_type &= ~SKB_GSO_TCPV6;
-			skb_shinfo(skb)->gso_type |=  SKB_GSO_TCPV4;
+		if (shinfo->gso_type & SKB_GSO_TCPV6) {
+			shinfo->gso_type &= ~SKB_GSO_TCPV6;
+			shinfo->gso_type |=  SKB_GSO_TCPV4;
 		}
 
 		/* Due to IPv4 header, MSS can be upgraded. */
-		skb_shinfo(skb)->gso_size += len_diff;
+		skb_increase_gso_size(shinfo, len_diff);
 		/* Header must be checked, and gso_segs recomputed. */
-		skb_shinfo(skb)->gso_type |= SKB_GSO_DODGY;
-		skb_shinfo(skb)->gso_segs = 0;
+		shinfo->gso_type |= SKB_GSO_DODGY;
+		shinfo->gso_segs = 0;
 	}
 
 	skb->protocol = htons(ETH_P_IP);
@@ -2257,6 +2269,10 @@ static int bpf_skb_net_grow(struct sk_buff *skb, u32 len_diff)
 	u32 off = skb_mac_header_len(skb) + bpf_skb_net_base_len(skb);
 	int ret;
 
+	/* SCTP uses GSO_BY_FRAGS, thus cannot adjust it. */
+	if (skb_is_gso(skb) && unlikely(skb_is_gso_sctp(skb)))
+		return -ENOTSUPP;
+
 	ret = skb_cow(skb, len_diff);
 	if (unlikely(ret < 0))
 		return ret;
@@ -2266,11 +2282,13 @@ static int bpf_skb_net_grow(struct sk_buff *skb, u32 len_diff)
 		return ret;
 
 	if (skb_is_gso(skb)) {
+		struct skb_shared_info *shinfo = skb_shinfo(skb);
+
 		/* Due to header grow, MSS needs to be downgraded. */
-		skb_shinfo(skb)->gso_size -= len_diff;
+		skb_decrease_gso_size(shinfo, len_diff);
 		/* Header must be checked, and gso_segs recomputed. */
-		skb_shinfo(skb)->gso_type |= SKB_GSO_DODGY;
-		skb_shinfo(skb)->gso_segs = 0;
+		shinfo->gso_type |= SKB_GSO_DODGY;
+		shinfo->gso_segs = 0;
 	}
 
 	return 0;
@@ -2281,6 +2299,10 @@ static int bpf_skb_net_shrink(struct sk_buff *skb, u32 len_diff)
 	u32 off = skb_mac_header_len(skb) + bpf_skb_net_base_len(skb);
 	int ret;
 
+	/* SCTP uses GSO_BY_FRAGS, thus cannot adjust it. */
+	if (skb_is_gso(skb) && unlikely(skb_is_gso_sctp(skb)))
+		return -ENOTSUPP;
+
 	ret = skb_unclone(skb, GFP_ATOMIC);
 	if (unlikely(ret < 0))
 		return ret;
@@ -2290,11 +2312,13 @@ static int bpf_skb_net_shrink(struct sk_buff *skb, u32 len_diff)
 		return ret;
 
 	if (skb_is_gso(skb)) {
+		struct skb_shared_info *shinfo = skb_shinfo(skb);
+
 		/* Due to header shrink, MSS can be upgraded. */
-		skb_shinfo(skb)->gso_size += len_diff;
+		skb_increase_gso_size(shinfo, len_diff);
 		/* Header must be checked, and gso_segs recomputed. */
-		skb_shinfo(skb)->gso_type |= SKB_GSO_DODGY;
-		skb_shinfo(skb)->gso_segs = 0;
+		shinfo->gso_type |= SKB_GSO_DODGY;
+		shinfo->gso_segs = 0;
 	}
 
 	return 0;
@@ -3208,6 +3232,8 @@ bpf_base_func_proto(enum bpf_func_id func_id)
 		return &bpf_tail_call_proto;
 	case BPF_FUNC_ktime_get_ns:
 		return &bpf_ktime_get_ns_proto;
+	case BPF_FUNC_ktime_get_boot_ns:
+		return &bpf_ktime_get_boot_ns_proto;
 	case BPF_FUNC_trace_printk:
 		if (capable(CAP_SYS_ADMIN))
 			return bpf_get_trace_printk_proto();
@@ -3279,6 +3305,8 @@ tc_cls_act_func_proto(enum bpf_func_id func_id)
 		return &bpf_skb_adjust_room_proto;
 	case BPF_FUNC_skb_change_tail:
 		return &bpf_skb_change_tail_proto;
+	case BPF_FUNC_skb_change_head:
+		return &bpf_skb_change_head_proto;
 	case BPF_FUNC_skb_get_tunnel_key:
 		return &bpf_skb_get_tunnel_key_proto;
 	case BPF_FUNC_skb_set_tunnel_key:

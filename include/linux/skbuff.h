@@ -41,6 +41,10 @@
 #include <linux/if_packet.h>
 #include <net/flow.h>
 
+
+#define NET_RX_BATCH_SOLUTION 1
+
+
 /* The interface for checksum offload between the stack and networking drivers
  * is as follows...
  *
@@ -570,6 +574,8 @@ enum {
 	SKB_GSO_ESP = 1 << 15,
 
 	SKB_GSO_UDP = 1 << 16,
+
+	SKB_GSO_UDP_L4 = 1 << 17,
 };
 
 #if BITS_PER_LONG > 32
@@ -672,7 +678,9 @@ struct sk_buff {
 			};
 		};
 		struct rb_node		rbnode; /* used in netem, ip4 defrag, and tcp stack */
+#ifndef NET_RX_BATCH_SOLUTION
 		struct list_head	list;
+#endif
 	};
 
 	union {
@@ -691,7 +699,9 @@ struct sk_buff {
 	 * first. This is owned by whoever has the skb queued ATM.
 	 */
 	char			cb[48] __aligned(8);
-
+#ifdef NET_RX_BATCH_SOLUTION
+	struct list_head list;
+#endif
 	unsigned long		_skb_refdst;
 	void			(*destructor)(struct sk_buff *skb);
 #ifdef CONFIG_XFRM
@@ -1762,7 +1772,8 @@ static inline void __skb_insert(struct sk_buff *newsk,
 	WRITE_ONCE(list->qlen, list->qlen + 1);
 }
 
-static inline void __skb_queue_splice(const struct sk_buff_head *list,
+static inline void __attribute__((no_sanitize("object-size")))
+	__skb_queue_splice(const struct sk_buff_head *list,
 				      struct sk_buff *prev,
 				      struct sk_buff *next)
 {
@@ -1860,7 +1871,8 @@ static inline void __skb_queue_after(struct sk_buff_head *list,
 void skb_append(struct sk_buff *old, struct sk_buff *newsk,
 		struct sk_buff_head *list);
 
-static inline void __skb_queue_before(struct sk_buff_head *list,
+static inline void __attribute__((no_sanitize("object-size")))
+	__skb_queue_before(struct sk_buff_head *list,
 				      struct sk_buff *next,
 				      struct sk_buff *newsk)
 {
@@ -4065,11 +4077,33 @@ static inline bool skb_is_gso_v6(const struct sk_buff *skb)
 	return skb_shinfo(skb)->gso_type & SKB_GSO_TCPV6;
 }
 
+/* Note: Should be called only if skb_is_gso(skb) is true */
+static inline bool skb_is_gso_sctp(const struct sk_buff *skb)
+{
+	return skb_shinfo(skb)->gso_type & SKB_GSO_SCTP;
+}
+
 static inline void skb_gso_reset(struct sk_buff *skb)
 {
 	skb_shinfo(skb)->gso_size = 0;
 	skb_shinfo(skb)->gso_segs = 0;
 	skb_shinfo(skb)->gso_type = 0;
+}
+
+static inline void skb_increase_gso_size(struct skb_shared_info *shinfo,
+					 u16 increment)
+{
+	if (WARN_ON_ONCE(shinfo->gso_size == GSO_BY_FRAGS))
+		return;
+	shinfo->gso_size += increment;
+}
+
+static inline void skb_decrease_gso_size(struct skb_shared_info *shinfo,
+					 u16 decrement)
+{
+	if (WARN_ON_ONCE(shinfo->gso_size == GSO_BY_FRAGS))
+		return;
+	shinfo->gso_size -= decrement;
 }
 
 void __skb_warn_lro_forwarding(const struct sk_buff *skb);

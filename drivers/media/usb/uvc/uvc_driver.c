@@ -821,16 +821,26 @@ static int uvc_parse_streaming(struct uvc_device *dev,
 		goto error;
 	}
 
-	size = nformats * sizeof *format + nframes * sizeof *frame
-	     + nintervals * sizeof *interval;
+	/*
+	 * Allocate memory for the formats, the frames and the intervals,
+	 * plus any required padding to guarantee that everything has the
+	 * correct alignment.
+	 */
+	size = nformats * sizeof(*format);
+	size = ALIGN(size, __alignof__(*frame)) + nframes * sizeof(*frame);
+	size = ALIGN(size, __alignof__(*interval))
+	     + nintervals * sizeof(*interval);
+
 	format = kzalloc(size, GFP_KERNEL);
-	if (format == NULL) {
+	if (!format) {
 		ret = -ENOMEM;
 		goto error;
 	}
 
-	frame = (struct uvc_frame *)&format[nformats];
-	interval = (__u32 *)&frame[nframes];
+	frame = (void *)format + nformats * sizeof(*format);
+	frame = PTR_ALIGN(frame, __alignof__(*frame));
+	interval = (void *)frame + nframes * sizeof(*frame);
+	interval = PTR_ALIGN(interval, __alignof__(*interval));
 
 	streaming->format = format;
 	streaming->nformats = nformats;
@@ -2248,7 +2258,7 @@ static int uvc_reset_resume(struct usb_interface *intf)
  * Module parameters
  */
 
-static int uvc_clock_param_get(char *buffer, struct kernel_param *kp)
+static int uvc_clock_param_get(char *buffer, const struct kernel_param *kp)
 {
 	if (uvc_clock_param == CLOCK_MONOTONIC)
 		return sprintf(buffer, "CLOCK_MONOTONIC");
@@ -2256,7 +2266,7 @@ static int uvc_clock_param_get(char *buffer, struct kernel_param *kp)
 		return sprintf(buffer, "CLOCK_REALTIME");
 }
 
-static int uvc_clock_param_set(const char *val, struct kernel_param *kp)
+static int uvc_clock_param_set(const char *val, const struct kernel_param *kp)
 {
 	if (strncasecmp(val, "clock_", strlen("clock_")) == 0)
 		val += strlen("clock_");

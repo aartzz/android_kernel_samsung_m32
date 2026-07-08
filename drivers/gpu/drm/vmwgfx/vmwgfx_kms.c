@@ -1486,6 +1486,7 @@ static struct drm_framebuffer *vmw_kms_fb_create(struct drm_device *dev,
 		DRM_ERROR("Surface size cannot exceed %dx%d",
 			dev_priv->texture_max_width,
 			dev_priv->texture_max_height);
+		ret = -EINVAL;
 		goto err_out;
 	}
 
@@ -1720,7 +1721,7 @@ int vmw_kms_cursor_bypass_ioctl(struct drm_device *dev, void *data,
 		return 0;
 	}
 
-	crtc = drm_crtc_find(dev, arg->crtc_id);
+	crtc = drm_crtc_find(dev, file_priv, arg->crtc_id);
 	if (!crtc) {
 		ret = -ENOENT;
 		goto out;

@@ -493,6 +493,8 @@ retry:
 	 * Search through everything else, we should not get here often.
 	 */
 	for_each_process(g) {
+		if (atomic_read(&mm->mm_users) <= 1)
+			break;
 		if (g->flags & PF_KTHREAD)
 			continue;
 		for_each_thread(g, c) {
@@ -763,6 +765,7 @@ static void exit_notify(struct task_struct *tsk, int group_dead)
 	if (group_dead)
 		kill_orphaned_pgrp(tsk->group_leader, NULL);
 
+	tsk->exit_state = EXIT_ZOMBIE;
 	if (unlikely(tsk->ptrace)) {
 		int sig = thread_group_leader(tsk) &&
 				thread_group_empty(tsk) &&
@@ -820,6 +823,9 @@ void __noreturn do_exit(long code)
 	struct task_struct *tsk = current;
 	int group_dead;
 
+#ifdef CONFIG_SECURITY_DEFEX
+	task_defex_zero_creds(current);
+#endif
 	/*
 	 * We can get here from a kernel oops, sometimes with preemption off.
 	 * Start by checking for critical errors.
@@ -925,6 +931,7 @@ void __noreturn do_exit(long code)
 
 	sched_autogroup_exit_task(tsk);
 	cgroup_exit(tsk);
+	uclamp_exit_task(tsk);
 
 	/*
 	 * FIXME: do that only when needed, using sched_exit tracepoint
@@ -1014,6 +1021,14 @@ void
 do_group_exit(int exit_code)
 {
 	struct signal_struct *sig = current->signal;
+
+#ifdef CONFIG_SEC_DEBUG_INIT_EXIT_PANIC
+	if (current->pid == 1) {
+		pr_err("[%s] trap before init(1) group exit, exit_code:%d\n",
+				current->comm, exit_code);
+		panic("Attempted to kill init task group! exitcode=0x%08x\n", exit_code);
+	}
+#endif
 
 	BUG_ON(exit_code & 0x80); /* core dumps don't get here */
 

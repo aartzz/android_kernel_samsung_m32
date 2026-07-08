@@ -160,31 +160,38 @@ static inline bool dev_xmit_complete(int rc)
  *	(unsigned long) so they can be read and written atomically.
  */
 
+#define NET_DEV_STAT(FIELD)			\
+	union {					\
+		unsigned long FIELD;		\
+		atomic_long_t __##FIELD;	\
+	}
+
 struct net_device_stats {
-	unsigned long	rx_packets;
-	unsigned long	tx_packets;
-	unsigned long	rx_bytes;
-	unsigned long	tx_bytes;
-	unsigned long	rx_errors;
-	unsigned long	tx_errors;
-	unsigned long	rx_dropped;
-	unsigned long	tx_dropped;
-	unsigned long	multicast;
-	unsigned long	collisions;
-	unsigned long	rx_length_errors;
-	unsigned long	rx_over_errors;
-	unsigned long	rx_crc_errors;
-	unsigned long	rx_frame_errors;
-	unsigned long	rx_fifo_errors;
-	unsigned long	rx_missed_errors;
-	unsigned long	tx_aborted_errors;
-	unsigned long	tx_carrier_errors;
-	unsigned long	tx_fifo_errors;
-	unsigned long	tx_heartbeat_errors;
-	unsigned long	tx_window_errors;
-	unsigned long	rx_compressed;
-	unsigned long	tx_compressed;
+	NET_DEV_STAT(rx_packets);
+	NET_DEV_STAT(tx_packets);
+	NET_DEV_STAT(rx_bytes);
+	NET_DEV_STAT(tx_bytes);
+	NET_DEV_STAT(rx_errors);
+	NET_DEV_STAT(tx_errors);
+	NET_DEV_STAT(rx_dropped);
+	NET_DEV_STAT(tx_dropped);
+	NET_DEV_STAT(multicast);
+	NET_DEV_STAT(collisions);
+	NET_DEV_STAT(rx_length_errors);
+	NET_DEV_STAT(rx_over_errors);
+	NET_DEV_STAT(rx_crc_errors);
+	NET_DEV_STAT(rx_frame_errors);
+	NET_DEV_STAT(rx_fifo_errors);
+	NET_DEV_STAT(rx_missed_errors);
+	NET_DEV_STAT(tx_aborted_errors);
+	NET_DEV_STAT(tx_carrier_errors);
+	NET_DEV_STAT(tx_fifo_errors);
+	NET_DEV_STAT(tx_heartbeat_errors);
+	NET_DEV_STAT(tx_window_errors);
+	NET_DEV_STAT(rx_compressed);
+	NET_DEV_STAT(tx_compressed);
 };
+#undef NET_DEV_STAT
 
 
 #include <linux/cache.h>
@@ -323,7 +330,7 @@ struct napi_struct {
 	int			poll_owner;
 #endif
 	struct net_device	*dev;
-	struct sk_buff		*gro_list;
+	struct list_head	gro_list;
 	struct sk_buff		*skb;
 	struct hrtimer		timer;
 	struct list_head	dev_list;
@@ -2172,10 +2179,10 @@ static inline int gro_recursion_inc_test(struct sk_buff *skb)
 	return ++NAPI_GRO_CB(skb)->recursion_counter == GRO_RECURSION_LIMIT;
 }
 
-typedef struct sk_buff **(*gro_receive_t)(struct sk_buff **, struct sk_buff *);
-static inline struct sk_buff **call_gro_receive(gro_receive_t cb,
-						struct sk_buff **head,
-						struct sk_buff *skb)
+typedef struct sk_buff *(*gro_receive_t)(struct list_head *, struct sk_buff *);
+static inline struct sk_buff *call_gro_receive(gro_receive_t cb,
+					       struct list_head *head,
+					       struct sk_buff *skb)
 {
 	if (unlikely(gro_recursion_inc_test(skb))) {
 		NAPI_GRO_CB(skb)->flush |= 1;
@@ -2185,12 +2192,12 @@ static inline struct sk_buff **call_gro_receive(gro_receive_t cb,
 	return cb(head, skb);
 }
 
-typedef struct sk_buff **(*gro_receive_sk_t)(struct sock *, struct sk_buff **,
-					     struct sk_buff *);
-static inline struct sk_buff **call_gro_receive_sk(gro_receive_sk_t cb,
-						   struct sock *sk,
-						   struct sk_buff **head,
-						   struct sk_buff *skb)
+typedef struct sk_buff *(*gro_receive_sk_t)(struct sock *, struct list_head *,
+					    struct sk_buff *);
+static inline struct sk_buff *call_gro_receive_sk(gro_receive_sk_t cb,
+						  struct sock *sk,
+						  struct list_head *head,
+						  struct sk_buff *skb)
 {
 	if (unlikely(gro_recursion_inc_test(skb))) {
 		NAPI_GRO_CB(skb)->flush |= 1;
@@ -2207,6 +2214,9 @@ struct packet_type {
 					 struct net_device *,
 					 struct packet_type *,
 					 struct net_device *);
+	void			(*list_func) (struct list_head *,
+					      struct packet_type *,
+					      struct net_device *);
 	bool			(*id_match)(struct packet_type *ptype,
 					    struct sock *sk);
 	struct net		*af_packet_net;
@@ -2217,8 +2227,8 @@ struct packet_type {
 struct offload_callbacks {
 	struct sk_buff		*(*gso_segment)(struct sk_buff *skb,
 						netdev_features_t features);
-	struct sk_buff		**(*gro_receive)(struct sk_buff **head,
-						 struct sk_buff *skb);
+	struct sk_buff		*(*gro_receive)(struct list_head *head,
+						struct sk_buff *skb);
 	int			(*gro_complete)(struct sk_buff *skb, int nhoff);
 };
 
@@ -2236,6 +2246,12 @@ struct pcpu_sw_netstats {
 	u64     tx_packets;
 	u64     tx_bytes;
 	struct u64_stats_sync   syncp;
+};
+
+struct pcpu_lstats {
+	u64 packets;
+	u64 bytes;
+	struct u64_stats_sync syncp;
 };
 
 #define __netdev_alloc_pcpu_stats(type, gfp)				\
@@ -2467,7 +2483,7 @@ struct net_device *dev_get_by_index_rcu(struct net *net, int ifindex);
 struct net_device *dev_get_by_napi_id(unsigned int napi_id);
 int netdev_get_name(struct net *net, char *name, int ifindex);
 int dev_restart(struct net_device *dev);
-int skb_gro_receive(struct sk_buff **head, struct sk_buff *skb);
+int skb_gro_receive(struct sk_buff *p, struct sk_buff *skb);
 
 static inline unsigned int skb_gro_offset(const struct sk_buff *skb)
 {
@@ -2683,13 +2699,14 @@ static inline void skb_gro_remcsum_cleanup(struct sk_buff *skb,
 }
 
 #ifdef CONFIG_XFRM_OFFLOAD
-static inline void skb_gro_flush_final(struct sk_buff *skb, struct sk_buff **pp, int flush)
+static inline void skb_gro_flush_final(struct sk_buff *skb, struct sk_buff *pp,
+				       int flush)
 {
 	if (PTR_ERR(pp) != -EINPROGRESS)
 		NAPI_GRO_CB(skb)->flush |= flush;
 }
 static inline void skb_gro_flush_final_remcsum(struct sk_buff *skb,
-					       struct sk_buff **pp,
+					       struct sk_buff *pp,
 					       int flush,
 					       struct gro_remcsum *grc)
 {
@@ -2700,12 +2717,13 @@ static inline void skb_gro_flush_final_remcsum(struct sk_buff *skb,
 	}
 }
 #else
-static inline void skb_gro_flush_final(struct sk_buff *skb, struct sk_buff **pp, int flush)
+static inline void skb_gro_flush_final(struct sk_buff *skb, struct sk_buff *pp,
+				       int flush)
 {
 	NAPI_GRO_CB(skb)->flush |= flush;
 }
 static inline void skb_gro_flush_final_remcsum(struct sk_buff *skb,
-					       struct sk_buff **pp,
+					       struct sk_buff *pp,
 					       int flush,
 					       struct gro_remcsum *grc)
 {
@@ -2821,6 +2839,9 @@ struct softnet_data {
 	unsigned int		dropped;
 	struct sk_buff_head	input_pkt_queue;
 	struct napi_struct	backlog;
+#if defined(NET_RX_BATCH_SOLUTION)
+	struct list_head	skb_rx_list;
+#endif
 
 };
 
@@ -3294,8 +3315,11 @@ void generic_xdp_tx(struct sk_buff *skb, struct bpf_prog *xdp_prog);
 int do_xdp_generic(struct bpf_prog *xdp_prog, struct sk_buff *skb);
 int netif_rx(struct sk_buff *skb);
 int netif_rx_ni(struct sk_buff *skb);
+int netif_rx_list_ni(struct list_head *head);
 int netif_receive_skb(struct sk_buff *skb);
 gro_result_t napi_gro_receive(struct napi_struct *napi, struct sk_buff *skb);
+int netif_receive_skb_core(struct sk_buff *skb);
+void netif_receive_skb_list(struct list_head *head);
 void napi_gro_flush(struct napi_struct *napi, bool flush_old);
 struct sk_buff *napi_get_frags(struct napi_struct *napi);
 gro_result_t napi_gro_frags(struct napi_struct *napi);
@@ -3347,14 +3371,42 @@ u8 __dev_xdp_attached(struct net_device *dev, xdp_op_t xdp_op, u32 *prog_id);
 
 int __dev_forward_skb(struct net_device *dev, struct sk_buff *skb);
 int dev_forward_skb(struct net_device *dev, struct sk_buff *skb);
+int dev_forward_skb_nomtu(struct net_device *dev, struct sk_buff *skb);
 bool is_skb_forwardable(const struct net_device *dev,
 			const struct sk_buff *skb);
 
+static __always_inline bool __is_skb_forwardable(const struct net_device *dev,
+						 const struct sk_buff *skb,
+						 const bool check_mtu)
+{
+	const u32 vlan_hdr_len = 4; /* VLAN_HLEN */
+	unsigned int len;
+
+	if (!(dev->flags & IFF_UP))
+		return false;
+
+	if (!check_mtu)
+		return true;
+
+	len = dev->mtu + dev->hard_header_len + vlan_hdr_len;
+	if (skb->len <= len)
+		return true;
+
+	/* if TSO is enabled, we don't care about the length as the packet
+	 * could be forwarded without being segmented before
+	 */
+	if (skb_is_gso(skb))
+		return true;
+
+	return false;
+}
+
 static __always_inline int ____dev_forward_skb(struct net_device *dev,
-					       struct sk_buff *skb)
+					       struct sk_buff *skb,
+					       const bool check_mtu)
 {
 	if (skb_orphan_frags(skb, GFP_ATOMIC) ||
-	    unlikely(!is_skb_forwardable(dev, skb))) {
+	    unlikely(!__is_skb_forwardable(dev, skb, check_mtu))) {
 		atomic_long_inc(&dev->rx_dropped);
 		kfree_skb(skb);
 		return NET_RX_DROP;
@@ -3778,6 +3830,24 @@ void __hw_addr_unsync_dev(struct netdev_hw_addr_list *list,
 void __hw_addr_init(struct netdev_hw_addr_list *list);
 
 /* Functions used for device addresses handling */
+static inline void
+__dev_addr_set(struct net_device *dev, const u8 *addr, size_t len)
+{
+	memcpy(dev->dev_addr, addr, len);
+}
+
+static inline void dev_addr_set(struct net_device *dev, const u8 *addr)
+{
+	__dev_addr_set(dev, addr, dev->addr_len);
+}
+
+static inline void
+dev_addr_mod(struct net_device *dev, unsigned int offset,
+	     const u8 *addr, size_t len)
+{
+	memcpy(&dev->dev_addr[offset], addr, len);
+}
+
 int dev_addr_add(struct net_device *dev, const unsigned char *addr,
 		 unsigned char addr_type);
 int dev_addr_del(struct net_device *dev, const unsigned char *addr,
@@ -4493,5 +4563,11 @@ do {								\
  */
 #define PTYPE_HASH_SIZE	(16)
 #define PTYPE_HASH_MASK	(PTYPE_HASH_SIZE - 1)
+
+/* Note: Avoid these macros in fast path, prefer per-cpu or per-queue counters. */
+#define DEV_STATS_INC(DEV, FIELD) atomic_long_inc(&(DEV)->stats.__##FIELD)
+#define DEV_STATS_ADD(DEV, FIELD, VAL) 	\
+		atomic_long_add((VAL), &(DEV)->stats.__##FIELD)
+#define DEV_STATS_READ(DEV, FIELD) atomic_long_read(&(DEV)->stats.__##FIELD)
 
 #endif	/* _LINUX_NETDEVICE_H */

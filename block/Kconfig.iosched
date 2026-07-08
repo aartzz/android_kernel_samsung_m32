@@ -40,6 +40,26 @@ config CFQ_GROUP_IOSCHED
 	---help---
 	  Enable group IO scheduling in CFQ.
 
+
+#config IOSCHED_ORKGAME
+#	tristate "OrkGame I/O scheduler (Custom Zero-Overhead)"
+#	default n
+#	---help---
+#	  The OrkGame I/O scheduler is a custom, zero-overhead scheduler
+#	  optimized for mobile gaming workloads on eMMC 5.1 storage.
+#	  It prioritizes read operations aggressively for maximum UI
+#	  responsiveness and fast game asset loading.
+
+#	  Key features:
+#	  - Aggressive read deadlines and priority
+#	  - Write coalescing and throttling
+#	  - Burst mode with hysteresis for reads
+#	  - Sequential pattern detection
+#	  - Zero idle time for flash storage
+#	  - Extensive sysfs tunables and debugfs stats
+#
+#	  Developed by OrkGabb for Samsung Galaxy M325FV.
+
 choice
 
 	prompt "Default I/O scheduler"

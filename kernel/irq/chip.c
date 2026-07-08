@@ -16,6 +16,7 @@
 #include <linux/interrupt.h>
 #include <linux/kernel_stat.h>
 #include <linux/irqdomain.h>
+#include <linux/wakeup_reason.h>
 
 #include <trace/events/irq.h>
 
@@ -304,9 +305,7 @@ void irq_shutdown(struct irq_desc *desc)
 
 void irq_enable(struct irq_desc *desc)
 {
-	if (!irqd_irq_disabled(&desc->irq_data)) {
-		unmask_irq(desc);
-	} else {
+	if (irqd_irq_disabled(&desc->irq_data)) {
 		irq_state_clr_disabled(desc);
 		if (desc->irq_data.chip->irq_enable) {
 			desc->irq_data.chip->irq_enable(&desc->irq_data);
@@ -314,6 +313,8 @@ void irq_enable(struct irq_desc *desc)
 		} else {
 			unmask_irq(desc);
 		}
+	} else {
+		WARN(1, "IRQ %d is already enabled\n", desc->irq_data.irq);
 	}
 }
 
@@ -480,8 +481,22 @@ static bool irq_may_run(struct irq_desc *desc)
 	 * If the interrupt is not in progress and is not an armed
 	 * wakeup interrupt, proceed.
 	 */
-	if (!irqd_has_set(&desc->irq_data, mask))
+	if (!irqd_has_set(&desc->irq_data, mask)) {
+#ifdef CONFIG_PM_SLEEP
+		if (unlikely(desc->no_suspend_depth &&
+			     irqd_is_wakeup_set(&desc->irq_data))) {
+			unsigned int irq = irq_desc_get_irq(desc);
+			const char *name = "(unnamed)";
+
+			if (desc->action && desc->action->name)
+				name = desc->action->name;
+
+			log_abnormal_wakeup_reason("misconfigured IRQ %u %s",
+						   irq, name);
+		}
+#endif
 		return true;
+	}
 
 	/*
 	 * If the interrupt is an armed wakeup source, mark it pending

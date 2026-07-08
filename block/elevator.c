@@ -1,7 +1,7 @@
 /*
- *  Block device elevator/IO-scheduler.
+ * Block device elevator/IO-scheduler.
  *
- *  Copyright (C) 2000 Andrea Arcangeli <andrea@suse.de> SuSE
+ * Copyright (C) 2000 Andrea Arcangeli <andrea@suse.de> SuSE
  *
  * 30042000 Jens Axboe <axboe@kernel.dk> :
  *
@@ -9,12 +9,12 @@
  * one or even write a new "plug in". There are three pieces:
  * - elevator_fn, inserts a new request in the queue list
  * - elevator_merge_fn, decides whether a new buffer can be merged with
- *   an existing request
+ * an existing request
  * - elevator_dequeue_fn, called when a request is taken off the active list
  *
  * 20082000 Dave Jones <davej@suse.de> :
  * Removed tests for max-bomb-segments, which was breaking elvtune
- *  when run without -bN
+ * when run without -bN
  *
  * Jens:
  * - Rework again to work with bio instead of buffer_heads
@@ -49,7 +49,7 @@ static LIST_HEAD(elv_list);
 /*
  * Merge hash stuff.
  */
-#define rq_hash_key(rq)		(blk_rq_pos(rq) + blk_rq_sectors(rq))
+#define rq_hash_key(rq)         (blk_rq_pos(rq) + blk_rq_sectors(rq))
 
 /*
  * Query io scheduler to see if the current process issuing bio may be
@@ -224,7 +224,7 @@ int elevator_init(struct request_queue *q, char *name)
 		e = elevator_get(q, chosen_elevator, false);
 		if (!e)
 			printk(KERN_ERR "I/O scheduler %s not found\n",
-							chosen_elevator);
+						chosen_elevator);
 	}
 
 	if (!e) {
@@ -235,6 +235,9 @@ int elevator_init(struct request_queue *q, char *name)
 		 * to "none".
 		 */
 		if (q->mq_ops) {
+			if (q->tag_set && q->tag_set->flags & BLK_MQ_F_NO_SCHED_BY_DEFAULT)
+				return 0;
+
 			if (q->nr_hw_queues == 1)
 				e = elevator_get(q, "mq-deadline", false);
 			if (!e)
@@ -446,9 +449,9 @@ enum elv_merge elv_merge(struct request_queue *q, struct request **req,
 
 	/*
 	 * Levels of merges:
-	 * 	nomerges:  No merges at all attempted
-	 * 	noxmerges: Only simple one-hit cache try
-	 * 	merges:	   All merge tries attempted
+	 *	nomerges:  No merges at all attempted
+	 *	noxmerges: Only simple one-hit cache try
+	 *	merges:    All merge tries attempted
 	 */
 	if (blk_queue_nomerges(q) || !bio_mergeable(bio))
 		return ELEVATOR_NO_MERGE;
@@ -641,6 +644,8 @@ void __elv_add_request(struct request_queue *q, struct request *rq, int where)
 {
 	trace_block_rq_insert(q, rq);
 
+	blk_queue_io_vol_add(q, rq->cmd_flags, blk_rq_bytes(rq));
+
 	blk_pm_add_request(q, rq);
 
 	rq->q = q;
@@ -670,12 +675,12 @@ void __elv_add_request(struct request_queue *q, struct request *rq, int where)
 		/*
 		 * We kick the queue here for the following reasons.
 		 * - The elevator might have returned NULL previously
-		 *   to delay requests and returned them now.  As the
-		 *   queue wasn't empty before this request, ll_rw_blk
-		 *   won't run the queue on return, resulting in hang.
+		 * to delay requests and returned them now.  As the
+		 * queue wasn't empty before this request, ll_rw_blk
+		 * won't run the queue on return, resulting in hang.
 		 * - Usually, back inserted requests won't be merged
-		 *   with anything.  There's no point in delaying queue
-		 *   processing.
+		 * with anything.  There's no point in delaying queue
+		 * processing.
 		 */
 		__blk_run_queue(q);
 		break;
@@ -801,6 +806,8 @@ void elv_completed_request(struct request_queue *q, struct request *rq)
 	 */
 	if (blk_account_rq(rq)) {
 		q->in_flight[rq_is_sync(rq)]--;
+		if (!queue_in_flight(q))
+			q->in_flight_time += ktime_us_delta(ktime_get(), q->in_flight_stamp);
 		if ((rq->rq_flags & RQF_SORTED) &&
 		    e->type->ops.sq.elevator_completed_req_fn)
 			e->type->ops.sq.elevator_completed_req_fn(q, rq);
@@ -871,9 +878,15 @@ int elv_register_queue(struct request_queue *q)
 		}
 		kobject_uevent(&e->kobj, KOBJ_ADD);
 		e->registered = 1;
-		if (!e->uses_mq && e->type->ops.sq.elevator_registered_fn)
+
+		/*
+		 * Call elevator_registered_fn for all elevator types.
+		 * Needed for BFQ backport with blk-mq.
+		 */
+		if (e->type->ops.sq.elevator_registered_fn)
 			e->type->ops.sq.elevator_registered_fn(q);
 	}
+
 	return error;
 }
 EXPORT_SYMBOL(elv_register_queue);

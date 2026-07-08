@@ -383,9 +383,8 @@ static inline void __skb_tunnel_rx(struct sk_buff *skb, struct net_device *dev,
 static inline void skb_tunnel_rx(struct sk_buff *skb, struct net_device *dev,
 				 struct net *net)
 {
-	/* TODO : stats should be SMP safe */
-	dev->stats.rx_packets++;
-	dev->stats.rx_bytes += skb->len;
+	DEV_STATS_INC(dev, rx_packets);
+	DEV_STATS_ADD(dev, rx_bytes, skb->len);
 	__skb_tunnel_rx(skb, dev, net);
 }
 
@@ -501,6 +500,14 @@ static inline struct dst_entry *xfrm_lookup(struct net *net,
 	return dst_orig;
 }
 
+static inline struct dst_entry *
+xfrm_lookup_with_ifid(struct net *net, struct dst_entry *dst_orig,
+		      const struct flowi *fl, const struct sock *sk,
+		      int flags, u32 if_id)
+{
+	return dst_orig;
+}
+
 static inline struct dst_entry *xfrm_lookup_route(struct net *net,
 						  struct dst_entry *dst_orig,
 						  const struct flowi *fl,
@@ -519,6 +526,12 @@ static inline struct xfrm_state *dst_xfrm(const struct dst_entry *dst)
 struct dst_entry *xfrm_lookup(struct net *net, struct dst_entry *dst_orig,
 			      const struct flowi *fl, const struct sock *sk,
 			      int flags);
+
+struct dst_entry *xfrm_lookup_with_ifid(struct net *net,
+					struct dst_entry *dst_orig,
+					const struct flowi *fl,
+					const struct sock *sk, int flags,
+					u32 if_id);
 
 struct dst_entry *xfrm_lookup_route(struct net *net, struct dst_entry *dst_orig,
 				    const struct flowi *fl, const struct sock *sk,

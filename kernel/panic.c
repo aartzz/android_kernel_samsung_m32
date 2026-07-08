@@ -29,6 +29,9 @@
 #include <linux/bug.h>
 #include <linux/ratelimit.h>
 #include <linux/sysfs.h>
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
@@ -202,7 +205,14 @@ void panic(const char *fmt, ...)
 		 */
 		panic_on_warn = 0;
 	}
+#ifndef CONFIG_MACH_MT6739
+#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
+	struct pt_regs regs;
 
+	regs.regs[30] = _RET_IP_;
+	regs.pc = regs.regs[30] - sizeof(unsigned int);
+#endif
+#endif
 	/*
 	 * Disable local interrupts. This will prevent panic_smp_self_stop
 	 * from deadlocking the first cpu that invokes the panic, since
@@ -238,7 +248,24 @@ void panic(const char *fmt, ...)
 	va_start(args, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
+	
+#ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
+	if (buf[strlen(buf) - 1] == '\n')
+		buf[strlen(buf) - 1] = '\0';
+#endif
+
+#ifndef CONFIG_MACH_MT6739
+#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
+	sec_debug_set_extra_info_fault((unsigned long)regs.pc, &regs);
+#endif
+#endif
+
+#ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
+	pr_auto(ASL5, "Kernel panic - not syncing: %s\n", buf);
+#else
 	pr_emerg("Kernel panic - not syncing: %s\n", buf);
+#endif
+
 #ifdef CONFIG_DEBUG_BUGVERBOSE
 	/*
 	 * Avoid nested stack-dumping if a panic occurs during oops processing
@@ -604,9 +631,11 @@ void __warn(const char *file, int line, void *caller, unsigned taint,
 
 	print_modules();
 
+#ifndef CONFIG_SEC_DEBUG
 	if (regs)
 		show_regs(regs);
 	else
+#endif
 		dump_stack();
 
 	print_oops_end_marker();
@@ -655,7 +684,7 @@ EXPORT_SYMBOL(warn_slowpath_null);
  */
 __visible void __stack_chk_fail(void)
 {
-	panic("stack-protector: Kernel stack is corrupted in: %p\n",
+	panic("stack-protector: Kernel stack is corrupted in: %pB\n",
 		__builtin_return_address(0));
 }
 EXPORT_SYMBOL(__stack_chk_fail);

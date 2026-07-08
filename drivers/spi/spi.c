@@ -861,6 +861,7 @@ static int __spi_map_msg(struct spi_controller *ctlr, struct spi_message *msg)
 	else
 		rx_dev = ctlr->dev.parent;
 
+	ret = -ENOMSG;
 	list_for_each_entry(xfer, &msg->transfers, transfer_list) {
 		if (!ctlr->can_dma(ctlr, msg->spi, xfer))
 			continue;
@@ -884,6 +885,9 @@ static int __spi_map_msg(struct spi_controller *ctlr, struct spi_message *msg)
 			}
 		}
 	}
+	/* No transfer has been mapped, bail out with success */
+	if (ret)
+		return 0;
 
 	ctlr->cur_msg_mapped = true;
 
@@ -1062,7 +1066,9 @@ static int spi_transfer_one_message(struct spi_controller *ctlr,
 				ret = 0;
 				ms = 8LL * 1000LL * xfer->len;
 				do_div(ms, xfer->speed_hz);
-				ms += ms + 200; /* some tolerance */
+				/* Increase spi transfer tolerance to 2s */
+				/* To aviod timeout when OS is busy.*/
+				ms += 2000;
 
 				if (ms > UINT_MAX)
 					ms = UINT_MAX;
@@ -2851,7 +2857,20 @@ int spi_setup(struct spi_device *spi)
 	if (spi->controller->setup)
 		status = spi->controller->setup(spi);
 
-	spi_set_cs(spi, false);
+	if (spi->master->auto_runtime_pm && spi->master->set_cs) {
+		status = pm_runtime_get_sync(spi->master->dev.parent);
+		if (status < 0) {
+			pm_runtime_put_noidle(spi->master->dev.parent);
+			dev_err(&spi->dev, "Failed to power device: %d\n",
+				status);
+			return status;
+		}
+		spi_set_cs(spi, false);
+		pm_runtime_mark_last_busy(spi->master->dev.parent);
+		pm_runtime_put_autosuspend(spi->master->dev.parent);
+	} else {
+		spi_set_cs(spi, false);
+	}
 
 	dev_dbg(&spi->dev, "setup mode %d, %s%s%s%s%u bits/w, %u Hz max --> %d\n",
 			(int) (spi->mode & (SPI_CPOL | SPI_CPHA)),

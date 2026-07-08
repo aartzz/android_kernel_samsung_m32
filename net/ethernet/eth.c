@@ -165,15 +165,7 @@ __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev)
 	eth = (struct ethhdr *)skb->data;
 	skb_pull_inline(skb, ETH_HLEN);
 
-	if (unlikely(is_multicast_ether_addr_64bits(eth->h_dest))) {
-		if (ether_addr_equal_64bits(eth->h_dest, dev->broadcast))
-			skb->pkt_type = PACKET_BROADCAST;
-		else
-			skb->pkt_type = PACKET_MULTICAST;
-	}
-	else if (unlikely(!ether_addr_equal_64bits(eth->h_dest,
-						   dev->dev_addr)))
-		skb->pkt_type = PACKET_OTHERHOST;
+	eth_skb_pkt_type(skb, dev);
 
 	/*
 	 * Some variants of DSA tagging don't have an ethertype field
@@ -432,13 +424,13 @@ ssize_t sysfs_format_mac(char *buf, const unsigned char *addr, int len)
 }
 EXPORT_SYMBOL(sysfs_format_mac);
 
-struct sk_buff **eth_gro_receive(struct sk_buff **head,
-				 struct sk_buff *skb)
+struct sk_buff *eth_gro_receive(struct list_head *head, struct sk_buff *skb)
 {
-	struct sk_buff *p, **pp = NULL;
-	struct ethhdr *eh, *eh2;
-	unsigned int hlen, off_eth;
 	const struct packet_offload *ptype;
+	unsigned int hlen, off_eth;
+	struct sk_buff *pp = NULL;
+	struct ethhdr *eh, *eh2;
+	struct sk_buff *p;
 	__be16 type;
 	int flush = 1;
 
@@ -453,7 +445,7 @@ struct sk_buff **eth_gro_receive(struct sk_buff **head,
 
 	flush = 0;
 
-	for (p = *head; p; p = p->next) {
+	list_for_each_entry(p, head, list) {
 		if (!NAPI_GRO_CB(p)->same_flow)
 			continue;
 

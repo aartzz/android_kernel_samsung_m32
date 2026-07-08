@@ -18,6 +18,7 @@
 #include <linux/string.h>
 #include <linux/mm.h>
 #include <linux/fs.h>
+#include <linux/fscrypt.h>
 #include <linux/fsnotify.h>
 #include <linux/slab.h>
 #include <linux/init.h>
@@ -38,10 +39,14 @@
 #include <linux/prefetch.h>
 #include <linux/ratelimit.h>
 #include <linux/list_lru.h>
-#include <linux/kasan.h>
-
+#ifdef CONFIG_RUSTUH_KDP_NS
+#include <linux/rustkdp.h>
+#endif
 #include "internal.h"
 #include "mount.h"
+#ifdef CONFIG_KDP_NS
+u8 ns_prot = 0;
+#endif
 
 /*
  * Usage:
@@ -195,7 +200,7 @@ static inline int dentry_string_cmp(const unsigned char *cs, const unsigned char
 	unsigned long a,b,mask;
 
 	for (;;) {
-		a = *(unsigned long *)cs;
+		a = read_word_at_a_time(cs);
 		b = load_unaligned_zeropad(ct);
 		if (tcount < sizeof(unsigned long))
 			break;
@@ -270,24 +275,10 @@ static void __d_free(struct rcu_head *head)
 	kmem_cache_free(dentry_cache, dentry); 
 }
 
-static void __d_free_external_name(struct rcu_head *head)
-{
-	struct external_name *name = container_of(head, struct external_name,
-						  u.head);
-
-	mod_node_page_state(page_pgdat(virt_to_page(name)),
-			    NR_INDIRECTLY_RECLAIMABLE_BYTES,
-			    -ksize(name));
-
-	kfree(name);
-}
-
 static void __d_free_external(struct rcu_head *head)
 {
 	struct dentry *dentry = container_of(head, struct dentry, d_u.d_rcu);
-
-	__d_free_external_name(&external_name(dentry)->u.head);
-
+	kfree(external_name(dentry));
 	kmem_cache_free(dentry_cache, dentry);
 }
 
@@ -319,7 +310,7 @@ void release_dentry_name_snapshot(struct name_snapshot *name)
 		struct external_name *p;
 		p = container_of(name->name, struct external_name, name[0]);
 		if (unlikely(atomic_dec_and_test(&p->u.count)))
-			call_rcu(&p->u.head, __d_free_external_name);
+			kfree_rcu(p, u.head);
 	}
 }
 EXPORT_SYMBOL(release_dentry_name_snapshot);
@@ -709,12 +700,12 @@ static inline bool fast_dput(struct dentry *dentry)
 	 */
 	if (unlikely(ret < 0)) {
 		spin_lock(&dentry->d_lock);
-		if (dentry->d_lockref.count > 1) {
-			dentry->d_lockref.count--;
+		if (WARN_ON_ONCE(dentry->d_lockref.count <= 0)) {
 			spin_unlock(&dentry->d_lock);
 			return 1;
 		}
-		return 0;
+		dentry->d_lockref.count--;
+		goto locked;
 	}
 
 	/*
@@ -765,6 +756,7 @@ static inline bool fast_dput(struct dentry *dentry)
 	 * else could have killed it and marked it dead. Either way, we
 	 * don't need to do anything else.
 	 */
+locked:
 	if (dentry->d_lockref.count) {
 		spin_unlock(&dentry->d_lock);
 		return 1;
@@ -1615,7 +1607,6 @@ EXPORT_SYMBOL(d_invalidate);
  
 struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
 {
-	struct external_name *ext = NULL;
 	struct dentry *dentry;
 	char *dname;
 	int err;
@@ -1636,16 +1627,15 @@ struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
 		dname = dentry->d_iname;
 	} else if (name->len > DNAME_INLINE_LEN-1) {
 		size_t size = offsetof(struct external_name, name[1]);
-		ext = kmalloc(size + name->len, GFP_KERNEL_ACCOUNT);
-		if (!ext) {
+		struct external_name *p = kmalloc(size + name->len,
+						  GFP_KERNEL_ACCOUNT |
+						  __GFP_RECLAIMABLE);
+		if (!p) {
 			kmem_cache_free(dentry_cache, dentry); 
 			return NULL;
 		}
-		atomic_set(&ext->u.count, 1);
-		dname = ext->name;
-		if (IS_ENABLED(CONFIG_DCACHE_WORD_ACCESS))
-			kasan_unpoison_shadow(dname,
-				round_up(name->len + 1,	sizeof(unsigned long)));
+		atomic_set(&p->u.count, 1);
+		dname = p->name;
 	} else  {
 		dname = dentry->d_iname;
 	}	
@@ -1683,12 +1673,6 @@ struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
 			kmem_cache_free(dentry_cache, dentry);
 			return NULL;
 		}
-	}
-
-	if (unlikely(ext)) {
-		pg_data_t *pgdat = page_pgdat(virt_to_page(ext));
-		mod_node_page_state(pgdat, NR_INDIRECTLY_RECLAIMABLE_BYTES,
-				    ksize(ext));
 	}
 
 	this_cpu_inc(nr_dentry);
@@ -2141,6 +2125,48 @@ static inline bool d_same_name(const struct dentry *dentry,
 				       name) == 0;
 }
 
+/*
+ * This is __d_lookup_rcu() when the parent dentry has
+ * DCACHE_OP_COMPARE, which makes things much nastier.
+ */
+static noinline struct dentry *__d_lookup_rcu_op_compare(
+	const struct dentry *parent,
+	const struct qstr *name,
+	unsigned *seqp)
+{
+	u64 hashlen = name->hash_len;
+	struct hlist_bl_head *b = d_hash(hashlen_hash(hashlen));
+	struct hlist_bl_node *node;
+	struct dentry *dentry;
+
+	hlist_bl_for_each_entry_rcu(dentry, node, b, d_hash) {
+		int tlen;
+		const char *tname;
+		unsigned seq;
+
+seqretry:
+		seq = raw_seqcount_begin(&dentry->d_seq);
+		if (dentry->d_parent != parent)
+			continue;
+		if (d_unhashed(dentry))
+			continue;
+		if (dentry->d_name.hash != hashlen_hash(hashlen))
+			continue;
+		tlen = dentry->d_name.len;
+		tname = dentry->d_name.name;
+		/* we want a consistent (name,len) pair */
+		if (read_seqcount_retry(&dentry->d_seq, seq)) {
+			cpu_relax();
+			goto seqretry;
+		}
+		if (parent->d_op->d_compare(dentry, tlen, tname, name) != 0)
+			continue;
+		*seqp = seq;
+		return dentry;
+	}
+	return NULL;
+}
+
 /**
  * __d_lookup_rcu - search for a dentry (racy, store-free)
  * @parent: parent dentry
@@ -2187,6 +2213,9 @@ struct dentry *__d_lookup_rcu(const struct dentry *parent,
 	 * Keep the two functions in sync.
 	 */
 
+	if (unlikely(parent->d_flags & DCACHE_OP_COMPARE))
+		return __d_lookup_rcu_op_compare(parent, name, seqp);
+
 	/*
 	 * The hash list is protected using RCU.
 	 *
@@ -2203,7 +2232,6 @@ struct dentry *__d_lookup_rcu(const struct dentry *parent,
 	hlist_bl_for_each_entry_rcu(dentry, node, b, d_hash) {
 		unsigned seq;
 
-seqretry:
 		/*
 		 * The dentry sequence count protects us from concurrent
 		 * renames, and thus protects parent and name fields.
@@ -2226,28 +2254,10 @@ seqretry:
 			continue;
 		if (d_unhashed(dentry))
 			continue;
-
-		if (unlikely(parent->d_flags & DCACHE_OP_COMPARE)) {
-			int tlen;
-			const char *tname;
-			if (dentry->d_name.hash != hashlen_hash(hashlen))
-				continue;
-			tlen = dentry->d_name.len;
-			tname = dentry->d_name.name;
-			/* we want a consistent (name,len) pair */
-			if (read_seqcount_retry(&dentry->d_seq, seq)) {
-				cpu_relax();
-				goto seqretry;
-			}
-			if (parent->d_op->d_compare(dentry,
-						    tlen, tname, name) != 0)
-				continue;
-		} else {
-			if (dentry->d_name.hash_len != hashlen)
-				continue;
-			if (dentry_cmp(dentry, str, hashlen_len(hashlen)) != 0)
-				continue;
-		}
+		if (dentry->d_name.hash_len != hashlen)
+			continue;
+		if (dentry_cmp(dentry, str, hashlen_len(hashlen)) != 0)
+			continue;
 		*seqp = seq;
 		return dentry;
 	}
@@ -2785,7 +2795,7 @@ static void copy_name(struct dentry *dentry, struct dentry *target)
 		dentry->d_name.hash_len = target->d_name.hash_len;
 	}
 	if (old_name && likely(atomic_dec_and_test(&old_name->u.count)))
-		call_rcu(&old_name->u.head, __d_free_external_name);
+		kfree_rcu(old_name, u.head);
 }
 
 static void dentry_lock_for_move(struct dentry *dentry, struct dentry *target)
@@ -2906,6 +2916,7 @@ static void __d_move(struct dentry *dentry, struct dentry *target,
 			fsnotify_update_flags(target);
 		fsnotify_update_flags(dentry);
 	}
+	fscrypt_handle_d_move(dentry);
 
 	write_seqcount_end(&target->d_seq);
 	write_seqcount_end(&dentry->d_seq);
@@ -3188,7 +3199,11 @@ restart:
 			if (mnt != parent) {
 				dentry = ACCESS_ONCE(mnt->mnt_mountpoint);
 				mnt = parent;
+#if defined(CONFIG_KDP_NS) || defined(CONFIG_RUSTUH_KDP_NS)
+				vfsmnt = mnt->mnt;
+#else
 				vfsmnt = &mnt->mnt;
+#endif
 				continue;
 			}
 			if (!error)
@@ -3279,6 +3294,7 @@ char *d_absolute_path(const struct path *path,
 		return ERR_PTR(error);
 	return res;
 }
+EXPORT_SYMBOL(d_absolute_path);
 
 /*
  * same as __d_path but appends "(deleted)" for unlinked files.
@@ -3562,28 +3578,25 @@ out:
   
 bool is_subdir(struct dentry *new_dentry, struct dentry *old_dentry)
 {
-	bool result;
+	bool subdir;
 	unsigned seq;
 
 	if (new_dentry == old_dentry)
 		return true;
 
-	do {
-		/* for restarting inner loop in case of seq retry */
-		seq = read_seqbegin(&rename_lock);
-		/*
-		 * Need rcu_readlock to protect against the d_parent trashing
-		 * due to d_move
-		 */
-		rcu_read_lock();
-		if (d_ancestor(old_dentry, new_dentry))
-			result = true;
-		else
-			result = false;
-		rcu_read_unlock();
-	} while (read_seqretry(&rename_lock, seq));
-
-	return result;
+	/* Access d_parent under rcu as d_move() may change it. */
+	rcu_read_lock();
+	seq = read_seqbegin(&rename_lock);
+	subdir = d_ancestor(old_dentry, new_dentry);
+	 /* Try lockless once... */
+	if (read_seqretry(&rename_lock, seq)) {
+		/* ...else acquire lock for progress even on deep chains. */
+		read_seqlock_excl(&rename_lock);
+		subdir = d_ancestor(old_dentry, new_dentry);
+		read_sequnlock_excl(&rename_lock);
+	}
+	rcu_read_unlock();
+	return subdir;
 }
 
 static enum d_walk_ret d_genocide_kill(void *data, struct dentry *dentry)
@@ -3691,8 +3704,10 @@ void __init vfs_caches_init_early(void)
 	for (i = 0; i < ARRAY_SIZE(in_lookup_hashtable); i++)
 		INIT_HLIST_BL_HEAD(&in_lookup_hashtable[i]);
 
+	set_memsize_kernel_type(MEMSIZE_KERNEL_VFSHASH);
 	dcache_init_early();
 	inode_init_early();
+	set_memsize_kernel_type(MEMSIZE_KERNEL_OTHERS);
 }
 
 void __init vfs_caches_init(void)
@@ -3707,4 +3722,11 @@ void __init vfs_caches_init(void)
 	mnt_init();
 	bdev_cache_init();
 	chrdev_init();
+#ifdef CONFIG_KDP_NS
+	ns_prot = 1;
+#endif
+#ifdef CONFIG_RUSTUH_KDP_NS
+	ns_protect = 1;
+#endif
+
 }

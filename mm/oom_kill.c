@@ -42,6 +42,13 @@
 #include <linux/init.h>
 #include <linux/mmu_notifier.h>
 
+#ifdef CONFIG_MTK_ION
+#include "mtk/ion_drv.h"
+#endif
+#ifdef CONFIG_MTK_GPU_SUPPORT
+#include <mt-plat/mtk_gpu_utility.h>
+#endif
+
 #include <asm/tlb.h>
 #include "internal.h"
 
@@ -50,7 +57,7 @@
 
 int sysctl_panic_on_oom;
 int sysctl_oom_kill_allocating_task;
-int sysctl_oom_dump_tasks = 1;
+int sysctl_oom_dump_tasks;
 
 DEFINE_MUTEX(oom_lock);
 /* Serializes oom_score_adj and oom_score_adj_min updates */
@@ -374,7 +381,7 @@ static void select_bad_process(struct oom_control *oc)
  * State information includes task's pid, uid, tgid, vm size, rss, nr_ptes,
  * swapents, oom_score_adj value, and name.
  */
-static void dump_tasks(struct mem_cgroup *memcg, const nodemask_t *nodemask)
+void dump_tasks(struct mem_cgroup *memcg, const nodemask_t *nodemask)
 {
 	struct task_struct *p;
 	struct task_struct *task;
@@ -407,6 +414,18 @@ static void dump_tasks(struct mem_cgroup *memcg, const nodemask_t *nodemask)
 	rcu_read_unlock();
 }
 
+/* dump extra info: HW memory usage */
+static void oom_dump_extra_info(void)
+{
+#ifdef CONFIG_MTK_ION
+	ion_mm_heap_memory_detail();
+#endif
+#ifdef CONFIG_MTK_GPU_SUPPORT
+	if (mtk_dump_gpu_memory_usage() == false)
+		pr_info("mtk_dump_gpu_memory_usage not support\n");
+#endif
+}
+
 static void dump_header(struct oom_control *oc, struct task_struct *p)
 {
 	pr_warn("%s invoked oom-killer: gfp_mask=%#x(%pGg), nodemask=",
@@ -428,6 +447,8 @@ static void dump_header(struct oom_control *oc, struct task_struct *p)
 		show_mem(SHOW_MEM_FILTER_NODES, oc->nodemask);
 	if (sysctl_oom_dump_tasks)
 		dump_tasks(oc->memcg, oc->nodemask);
+
+	oom_dump_extra_info();
 }
 
 /*
@@ -714,7 +735,7 @@ void exit_oom_victim(void)
 void oom_killer_enable(void)
 {
 	oom_killer_disabled = false;
-	pr_info("OOM killer enabled.\n");
+ 	pr_debug("OOM killer enabled.\n");
 }
 
 /**
@@ -751,7 +772,7 @@ bool oom_killer_disable(signed long timeout)
 		oom_killer_enable();
 		return false;
 	}
-	pr_info("OOM killer disabled.\n");
+ 	pr_debug("OOM killer disabled.\n");
 
 	return true;
 }
@@ -1080,6 +1101,9 @@ bool out_of_memory(struct oom_control *oc)
 	/* Found nothing?!?! Either we hang forever, or we panic. */
 	if (!oc->chosen && !is_sysrq_oom(oc) && !is_memcg_oom(oc)) {
 		dump_header(oc, NULL);
+#ifdef CONFIG_PAGE_OWNER
+		print_max_page_owner();
+#endif
 		panic("Out of memory and no killable processes...\n");
 	}
 	if (oc->chosen && oc->chosen != (void *)-1UL) {

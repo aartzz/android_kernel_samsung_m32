@@ -263,6 +263,8 @@ static inline bool ipv6_is_mld(struct sk_buff *skb, int nexthdr, int offset)
 void addrconf_prefix_rcv(struct net_device *dev,
 			 u8 *opt, int len, bool sllao);
 
+u32 addrconf_rt_table(const struct net_device *dev, u32 default_table);
+
 /*
  *	anycast prototypes (anycast.c)
  */
@@ -378,6 +380,10 @@ static inline void in6_ifa_hold(struct inet6_ifaddr *ifp)
 	refcount_inc(&ifp->refcnt);
 }
 
+static inline bool in6_ifa_hold_safe(struct inet6_ifaddr *ifp)
+{
+	return refcount_inc_not_zero(&ifp->refcnt);
+}
 
 /*
  *	compute link-local solicited-node multicast address

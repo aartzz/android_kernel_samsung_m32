@@ -98,6 +98,17 @@ struct nf_conn {
 
 	/* Storage reserved for other modules, must be the last member */
 	union nf_conntrack_proto proto;
+
+#ifdef CONFIG_HW_FORWARD
+	u32 packet_count;
+	bool forward_registered;
+	struct net_device *netdev;
+#endif
+#ifdef CONFIG_LINK_FORWARD
+	u32 packet_count;
+	bool linkforward_registered;
+	struct net_device *netdev;
+#endif
 };
 
 static inline struct nf_conn *
@@ -285,7 +296,7 @@ static inline bool nf_ct_should_gc(const struct nf_conn *ct)
 
 struct kernel_param;
 
-int nf_conntrack_set_hashsize(const char *val, struct kernel_param *kp);
+int nf_conntrack_set_hashsize(const char *val, const struct kernel_param *kp);
 int nf_conntrack_hash_resize(unsigned int hashsize);
 
 extern struct hlist_nulls_head *nf_conntrack_hash;

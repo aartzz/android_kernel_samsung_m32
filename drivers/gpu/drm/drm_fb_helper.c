@@ -1601,6 +1601,9 @@ int drm_fb_helper_check_var(struct fb_var_screeninfo *var,
 		return -EINVAL;
 	}
 
+	var->xres_virtual = fb->width;
+	var->yres_virtual = fb->height;
+
 	/*
 	 * Workaround for SDL 1.2, which is known to be setting all pixel format
 	 * fields values to zero in some cases. We treat this situation as a
@@ -1620,6 +1623,7 @@ int drm_fb_helper_check_var(struct fb_var_screeninfo *var,
 	 */
 	var->bits_per_pixel = fb->format->cpp[0] * 8;
 
+#if 0
 	/*
 	 * drm fbdev emulation doesn't support changing the pixel format at all,
 	 * so reject all pixel format changing requests.
@@ -1628,7 +1632,7 @@ int drm_fb_helper_check_var(struct fb_var_screeninfo *var,
 		DRM_DEBUG("fbdev emulation doesn't support changing the pixel format\n");
 		return -EINVAL;
 	}
-
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(drm_fb_helper_check_var);
@@ -1736,11 +1740,12 @@ int drm_fb_helper_pan_display(struct fb_var_screeninfo *var,
 		return -EBUSY;
 
 	mutex_lock(&fb_helper->lock);
+#if 0
 	if (!drm_fb_helper_is_bound(fb_helper)) {
 		mutex_unlock(&fb_helper->lock);
 		return -EBUSY;
 	}
-
+#endif
 	if (drm_drv_uses_atomic_modeset(dev))
 		ret = pan_display_atomic(var, info);
 	else

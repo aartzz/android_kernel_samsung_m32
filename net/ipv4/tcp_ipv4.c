@@ -1688,6 +1688,7 @@ process:
 
 	if (sk->sk_state == TCP_NEW_SYN_RECV) {
 		struct request_sock *req = inet_reqsk(sk);
+		bool req_stolen = false;
 		struct sock *nsk;
 
 		sk = req->rsk_listener;
@@ -1714,10 +1715,20 @@ process:
 			th = (const struct tcphdr *)skb->data;
 			iph = ip_hdr(skb);
 			tcp_v4_fill_cb(skb, iph, th);
-			nsk = tcp_check_req(sk, skb, req, false);
+			nsk = tcp_check_req(sk, skb, req, false, &req_stolen);
 		}
 		if (!nsk) {
 			reqsk_put(req);
+			if (req_stolen) {
+				/* Another cpu got exclusive access to req
+				 * and created a full blown socket.
+				 * Try to feed this packet to this socket
+				 * instead of discarding it.
+				 */
+				tcp_v4_restore_cb(skb);
+				sock_put(sk);
+				goto lookup;
+			}
 			goto discard_and_relse;
 		}
 		if (nsk == sk) {
@@ -2531,6 +2542,8 @@ static int __net_init tcp_sk_init(struct net *net)
 	net->ipv4.sysctl_tcp_sack = 1;
 	net->ipv4.sysctl_tcp_window_scaling = 1;
 	net->ipv4.sysctl_tcp_timestamps = 1;
+	net->ipv4.sysctl_tcp_default_init_rwnd = TCP_INIT_CWND * 2;
+	net->ipv4.sysctl_tcp_early_retrans = 3;
 
 	return 0;
 fail:

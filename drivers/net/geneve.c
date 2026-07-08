@@ -215,7 +215,7 @@ static void geneve_rx(struct geneve_dev *geneve, struct geneve_sock *gs,
 	struct metadata_dst *tun_dst = NULL;
 	struct pcpu_sw_netstats *stats;
 	unsigned int len;
-	int err = 0;
+	int nh, err = 0;
 	void *oiph;
 
 	if (ip_tunnel_collect_metadata() || gs->collect_md) {
@@ -259,8 +259,22 @@ static void geneve_rx(struct geneve_dev *geneve, struct geneve_sock *gs,
 		goto drop;
 	}
 
-	oiph = skb_network_header(skb);
+	/* Save offset of outer header relative to skb->head,
+	 * because we are going to reset the network header to the inner header
+	 * and might change skb->head.
+	 */
+	nh = skb_network_header(skb) - skb->head;
+
 	skb_reset_network_header(skb);
+
+	if (!pskb_inet_may_pull(skb)) {
+		DEV_STATS_INC(geneve->dev, rx_length_errors);
+		DEV_STATS_INC(geneve->dev, rx_errors);
+		goto drop;
+	}
+
+	/* Get the outer header. */
+	oiph = skb->head + nh;
 
 	if (geneve_get_sk_family(gs) == AF_INET)
 		err = IP_ECN_decapsulate(oiph, skb);
@@ -416,11 +430,12 @@ static int geneve_hlen(struct genevehdr *gh)
 	return sizeof(*gh) + gh->opt_len * 4;
 }
 
-static struct sk_buff **geneve_gro_receive(struct sock *sk,
-					   struct sk_buff **head,
-					   struct sk_buff *skb)
+static struct sk_buff *geneve_gro_receive(struct sock *sk,
+					  struct list_head *head,
+					  struct sk_buff *skb)
 {
-	struct sk_buff *p, **pp = NULL;
+	struct sk_buff *pp = NULL;
+	struct sk_buff *p;
 	struct genevehdr *gh, *gh2;
 	unsigned int hlen, gh_len, off_gnv;
 	const struct packet_offload *ptype;
@@ -447,7 +462,7 @@ static struct sk_buff **geneve_gro_receive(struct sock *sk,
 			goto out;
 	}
 
-	for (p = *head; p; p = p->next) {
+	list_for_each_entry(p, head, list) {
 		if (!NAPI_GRO_CB(p)->same_flow)
 			continue;
 
@@ -834,7 +849,7 @@ static int geneve_xmit_skb(struct sk_buff *skb, struct net_device *dev,
 	__be16 df;
 	int err;
 
-	if (!pskb_network_may_pull(skb, sizeof(struct iphdr)))
+	if (!skb_vlan_inet_prepare(skb))
 		return -EINVAL;
 
 	sport = udp_flow_src_port(geneve->net, skb, 1, USHRT_MAX, true);
@@ -884,7 +899,7 @@ static int geneve6_xmit_skb(struct sk_buff *skb, struct net_device *dev,
 	__be16 sport;
 	int err;
 
-	if (!pskb_network_may_pull(skb, sizeof(struct ipv6hdr)))
+	if (!skb_vlan_inet_prepare(skb))
 		return -EINVAL;
 
 	sport = udp_flow_src_port(geneve->net, skb, 1, USHRT_MAX, true);

@@ -11,6 +11,9 @@
 #include <linux/perf_event.h>
 #include "percpu_freelist.h"
 
+#define STACK_CREATE_FLAG_MASK \
+	(BPF_F_NUMA_NODE | BPF_F_RDONLY | BPF_F_WRONLY)
+
 struct stack_map_bucket {
 	struct pcpu_freelist_node fnode;
 	u32 hash;
@@ -61,7 +64,7 @@ static struct bpf_map *stack_map_alloc(union bpf_attr *attr)
 	if (!capable(CAP_SYS_ADMIN))
 		return ERR_PTR(-EPERM);
 
-	if (attr->map_flags & ~BPF_F_NUMA_NODE)
+	if (attr->map_flags & ~STACK_CREATE_FLAG_MASK)
 		return ERR_PTR(-EINVAL);
 
 	/* check sanity of attributes */
@@ -70,10 +73,13 @@ static struct bpf_map *stack_map_alloc(union bpf_attr *attr)
 	    value_size / 8 > sysctl_perf_event_max_stack)
 		return ERR_PTR(-EINVAL);
 
-	/* hash table size must be power of 2 */
-	n_buckets = roundup_pow_of_two(attr->max_entries);
-	if (!n_buckets)
+	/* hash table size must be power of 2; roundup_pow_of_two() can overflow
+	 * into UB on 32-bit arches, so check that first
+	 */
+	if (attr->max_entries > 1UL << 31)
 		return ERR_PTR(-E2BIG);
+
+	n_buckets = roundup_pow_of_two(attr->max_entries);
 
 	cost = n_buckets * sizeof(struct stack_map_bucket *) + sizeof(*smap);
 	if (cost >= U32_MAX - PAGE_SIZE)

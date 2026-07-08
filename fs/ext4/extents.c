@@ -446,9 +446,51 @@ static int ext4_valid_extent_entries(struct inode *inode,
 	return 1;
 }
 
+/* for debugging if ext4_extent is not valid */
+static void
+ext4_ext_show_eh(struct inode *inode, struct ext4_extent_header *eh)
+{
+	int i;
+
+	if (eh == NULL)
+		return;
+	printk(KERN_ERR "eh_magic : 0x%x eh_entries : %u "
+			"eh_max : %u eh_depth : %u \n",
+			le16_to_cpu(eh->eh_magic), le16_to_cpu(eh->eh_entries),
+			le16_to_cpu(eh->eh_max), le16_to_cpu(eh->eh_depth));
+
+	if (le16_to_cpu(eh->eh_depth) == 0) {
+		/* leaf entries */
+		struct ext4_extent *ex = EXT_FIRST_EXTENT(eh);
+
+		printk(KERN_ERR "Displaying leaf extents for inode %lu\n",
+				inode->i_ino);
+
+		for (i = 0; i < 4; i++, ex++) {
+			printk(KERN_ERR "leaf - block : %d / length : [%d]%d /"
+				" pblock : %llu\n", le32_to_cpu(ex->ee_block),
+				ext4_ext_is_unwritten(ex),
+				ext4_ext_get_actual_len(ex),
+				ext4_ext_pblock(ex));
+		}
+	} else {
+		struct ext4_extent_idx *ei = EXT_FIRST_INDEX(eh);
+
+		printk(KERN_ERR "Displaying index extents for inode %lu\n",
+				inode->i_ino);
+
+		for (i = 0; i < 4; i++, ei++) {
+			printk(KERN_ERR "idx - block : %d / pblock : %llu\n",
+					le32_to_cpu(ei->ei_block),
+					ext4_idx_pblock(ei));
+		}
+	}
+}
+
+/* @fs.sec -- a86ca6a359e99cc76c71bf7f3a0f0a63cf0c8799 -- */
 static int __ext4_ext_check(const char *function, unsigned int line,
 			    struct inode *inode, struct ext4_extent_header *eh,
-			    int depth, ext4_fsblk_t pblk)
+			    int depth, ext4_fsblk_t pblk, struct buffer_head *bh)
 {
 	const char *error_msg;
 	int max = 0, err = -EFSCORRUPTED;
@@ -492,6 +534,13 @@ static int __ext4_ext_check(const char *function, unsigned int line,
 	return 0;
 
 corrupted:
+	if (bh) {
+		printk(KERN_ERR "Print invalid extent bh: %s\n", error_msg);
+		print_bh(inode->i_sb, bh, 0, EXT4_BLOCK_SIZE(inode->i_sb));
+	} else {
+		printk(KERN_ERR "Print invalid extent entries\n");
+		ext4_ext_show_eh(inode, eh);
+	}
 	ext4_error_inode(inode, function, line, 0,
 			 "pblk %llu bad header/extent: %s - magic %x, "
 			 "entries %u, max %u(%u), depth %u(%u)",
@@ -503,7 +552,7 @@ corrupted:
 }
 
 #define ext4_ext_check(inode, eh, depth, pblk)			\
-	__ext4_ext_check(__func__, __LINE__, (inode), (eh), (depth), (pblk))
+	__ext4_ext_check(__func__, __LINE__, (inode), (eh), (depth), (pblk), (NULL))
 
 int ext4_ext_check_inode(struct inode *inode)
 {
@@ -552,12 +601,15 @@ __read_extent_tree_block(const char *function, unsigned int line,
 		if (err < 0)
 			goto errout;
 	}
+
 	if (buffer_verified(bh) && !(flags & EXT4_EX_FORCE_CACHE))
 		return bh;
+
 	err = __ext4_ext_check(function, line, inode,
-			       ext_block_hdr(bh), depth, pblk);
+					   ext_block_hdr(bh), depth, pblk, bh);
 	if (err)
 		goto errout;
+	
 	set_buffer_verified(bh);
 	/*
 	 * If this is a leaf block, cache all of its entries
@@ -570,7 +622,6 @@ __read_extent_tree_block(const char *function, unsigned int line,
 errout:
 	put_bh(bh);
 	return ERR_PTR(err);
-
 }
 
 #define read_extent_tree_block(inode, pblk, depth, flags)		\
@@ -1877,6 +1928,7 @@ static void ext4_ext_try_to_merge_up(handle_t *handle,
 	path[0].p_hdr->eh_max = cpu_to_le16(max_root);
 
 	brelse(path[1].p_bh);
+	path[1].p_bh = NULL;
 	ext4_free_blocks(handle, inode, NULL, blk, 1,
 			 EXT4_FREE_BLOCKS_METADATA | EXT4_FREE_BLOCKS_FORGET);
 }
@@ -2104,6 +2156,7 @@ prepend:
 				       ppath, newext);
 	if (err)
 		goto cleanup;
+	path = *ppath;
 	depth = ext_depth(inode);
 	eh = path[depth].p_hdr;
 
@@ -3278,7 +3331,7 @@ static int ext4_split_extent_at(handle_t *handle,
 		ext4_ext_mark_unwritten(ex2);
 
 	err = ext4_ext_insert_extent(handle, inode, ppath, &newex, flags);
-	if (err != -ENOSPC && err != -EDQUOT)
+	if (err != -ENOSPC && err != -EDQUOT && err != -ENOMEM)
 		goto out;
 
 	if (EXT4_EXT_MAY_ZEROOUT & split_flag) {
@@ -3450,9 +3503,10 @@ static int ext4_ext_convert_to_initialized(handle_t *handle,
 	struct ext4_extent *ex, *abut_ex;
 	ext4_lblk_t ee_block, eof_block;
 	unsigned int ee_len, depth, map_len = map->m_len;
-	int allocated = 0, max_zeroout = 0;
 	int err = 0;
 	int split_flag = EXT4_EXT_DATA_VALID2;
+	int allocated = 0;
+	unsigned int max_zeroout = 0;
 
 	ext_debug("ext4_ext_convert_to_initialized: inode %lu, logical"
 		"block %llu, max_blocks %u\n", inode->i_ino,
@@ -3607,7 +3661,7 @@ static int ext4_ext_convert_to_initialized(handle_t *handle,
 		max_zeroout = sbi->s_extent_max_zeroout_kb >>
 			(inode->i_sb->s_blocksize_bits - 10);
 
-	if (ext4_encrypted_inode(inode))
+	if (IS_ENCRYPTED(inode))
 		max_zeroout = 0;
 
 	/*
@@ -4953,7 +5007,7 @@ long ext4_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 	 * leave it disabled for encrypted inodes for now.  This is a
 	 * bug we should fix....
 	 */
-	if (ext4_encrypted_inode(inode) &&
+	if (IS_ENCRYPTED(inode) &&
 	    (mode & (FALLOC_FL_COLLAPSE_RANGE | FALLOC_FL_INSERT_RANGE |
 		     FALLOC_FL_ZERO_RANGE)))
 		return -EOPNOTSUPP;
@@ -5726,6 +5780,7 @@ int ext4_insert_range(struct inode *inode, loff_t offset, loff_t len)
 	path = ext4_find_extent(inode, offset_lblk, NULL, 0);
 	if (IS_ERR(path)) {
 		up_write(&EXT4_I(inode)->i_data_sem);
+		ret = PTR_ERR(path);
 		goto out_stop;
 	}
 

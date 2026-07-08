@@ -373,7 +373,7 @@ find_encoder(struct drm_connector *connector, int type)
 		if (!id)
 			break;
 
-		enc = drm_encoder_find(dev, id);
+		enc = drm_encoder_find(dev, NULL, id);
 		if (!enc)
 			continue;
 		nv_encoder = nouveau_encoder(enc);
@@ -441,7 +441,7 @@ nouveau_connector_ddc_detect(struct drm_connector *connector)
 		if (id == 0)
 			break;
 
-		encoder = drm_encoder_find(dev, id);
+		encoder = drm_encoder_find(dev, NULL, id);
 		if (!encoder)
 			continue;
 		nv_encoder = nouveau_encoder(encoder);
@@ -958,6 +958,9 @@ nouveau_connector_get_modes(struct drm_connector *connector)
 		struct drm_display_mode *mode;
 
 		mode = drm_mode_duplicate(dev, nv_connector->native_mode);
+		if (!mode)
+			return 0;
+
 		drm_mode_probed_add(connector, mode);
 		ret = 1;
 	}

@@ -29,6 +29,16 @@
 #include <asm/debug-monitors.h>
 #include <asm/set_memory.h>
 
+#ifdef CONFIG_UH
+#include <linux/uh.h>
+#ifdef CONFIG_UH_RKP
+#include <linux/rkp.h>
+#endif
+#endif
+#ifdef CONFIG_RUSTUH_RKP
+#include <linux/rustrkp.h>
+#endif
+
 #include "bpf_jit.h"
 
 #define TMP_REG_1 (MAX_BPF_JIT_REG + 0)
@@ -395,8 +405,7 @@ static int build_insn(const struct bpf_insn *insn, struct jit_ctx *ctx)
 			break;
 		case BPF_MOD:
 			emit(A64_UDIV(is64, tmp, dst, src), ctx);
-			emit(A64_MUL(is64, tmp, tmp, src), ctx);
-			emit(A64_SUB(is64, dst, dst, tmp), ctx);
+			emit(A64_MSUB(is64, dst, dst, tmp, src), ctx);
 			break;
 		}
 		break;
@@ -503,8 +512,7 @@ emit_bswap_uxt:
 	case BPF_ALU64 | BPF_MOD | BPF_K:
 		emit_a64_mov_i(is64, tmp2, imm, ctx);
 		emit(A64_UDIV(is64, tmp, dst, tmp2), ctx);
-		emit(A64_MUL(is64, tmp, tmp, tmp2), ctx);
-		emit(A64_SUB(is64, dst, dst, tmp), ctx);
+		emit(A64_MSUB(is64, dst, dst, tmp, tmp2), ctx);
 		break;
 	case BPF_ALU | BPF_LSH | BPF_K:
 	case BPF_ALU64 | BPF_LSH | BPF_K:
@@ -934,7 +942,12 @@ struct bpf_prog *bpf_int_jit_compile(struct bpf_prog *prog)
 	prog->bpf_func = (void *)ctx.image;
 	prog->jited = 1;
 	prog->jited_len = image_size;
-
+#ifdef CONFIG_UH_RKP
+	uh_call(UH_APP_RKP, RKP_BFP_LOAD, (u64)header, (u64)(header->pages * 0x1000), 0, 0);
+#endif
+#ifdef CONFIG_RUSTUH_RKP
+	uh_call(UH_APP_RKP, RKP_BPF_LOAD, (u64)header, (u64)(header->pages * 0x1000), 0, 0);
+#endif
 out_off:
 	kfree(ctx.offset);
 out:
@@ -943,3 +956,25 @@ out:
 					   tmp : orig_prog);
 	return prog;
 }
+
+#ifdef CONFIG_CFI_CLANG
+bool arch_bpf_jit_check_func(const struct bpf_prog *prog)
+{
+	const uintptr_t func = (const uintptr_t)prog->bpf_func;
+
+	/*
+	 * bpf_func must be correctly aligned and within the correct region.
+	 * module_alloc places JIT code in the module region, unless
+	 * ARM64_MODULE_PLTS is enabled, in which case we might end up using
+	 * the vmalloc region too.
+	 */
+	if (unlikely(!IS_ALIGNED(func, sizeof(u32))))
+		return false;
+
+	if (IS_ENABLED(CONFIG_ARM64_MODULE_PLTS) &&
+			is_vmalloc_addr(prog->bpf_func))
+		return true;
+
+	return (func >= MODULES_VADDR && func < MODULES_END);
+}
+#endif

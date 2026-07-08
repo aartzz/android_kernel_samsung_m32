@@ -108,12 +108,10 @@ int usb_ep_enable(struct usb_ep *ep)
 		goto out;
 
 	/* UDC drivers can't handle endpoints with maxpacket size 0 */
-	if (usb_endpoint_maxp(ep->desc) == 0) {
-		/*
-		 * We should log an error message here, but we can't call
-		 * dev_err() because there's no way to find the gadget
-		 * given only ep.
-		 */
+	if (!ep->desc || usb_endpoint_maxp(ep->desc) == 0) {
+		WARN_ONCE(1, "%s: ep%d (%s) has %s\n", __func__, ep->address, ep->name,
+			  (!ep->desc) ? "NULL descriptor" : "maxpacket 0");
+
 		ret = -EINVAL;
 		goto out;
 	}
@@ -272,7 +270,9 @@ int usb_ep_queue(struct usb_ep *ep,
 {
 	int ret = 0;
 
-	if (WARN_ON_ONCE(!ep->enabled && ep->address)) {
+	if (!ep->enabled && ep->address) {
+		pr_debug("USB gadget: queue request to disabled ep 0x%x (%s)\n",
+				 ep->address, ep->name);
 		ret = -ESHUTDOWN;
 		goto out;
 	}
@@ -1344,7 +1344,14 @@ static int udc_bind_to_driver(struct usb_udc *udc, struct usb_gadget_driver *dri
 		driver->unbind(udc->gadget);
 		goto err1;
 	}
-	usb_udc_connect_control(udc);
+
+	/* HACK to support Android */
+	/* usb_udc_connect_control(udc) */
+#ifdef CONFIG_USB_CONFIGFS
+	/* usb_udc_connect_control(udc); */
+	/* Just do pullup */
+	usb_gadget_connect(udc->gadget);
+#endif
 
 	kobject_uevent(&udc->dev.kobj, KOBJ_CHANGE);
 	return 0;
@@ -1368,6 +1375,8 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver)
 	mutex_lock(&udc_lock);
 	if (driver->udc_name) {
 		list_for_each_entry(udc, &udc_list, list) {
+			pr_info("%s %s %s\n", __func__,
+					driver->udc_name, dev_name(&udc->dev));
 			ret = strcmp(driver->udc_name, dev_name(&udc->dev));
 			if (!ret)
 				break;
