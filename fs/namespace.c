@@ -3718,17 +3718,6 @@ long do_mount(const char *dev_name, const char __user *dir_name,
 	struct path path;
 	unsigned int mnt_flags = 0, sb_flags;
 	int retval = 0;
-	
-	/* MTK Camera FIX: Prevent overlayfs on /vendor */
-	if (type_page && strcmp(type_page, "overlay") == 0) {
-		char dir_buf[128];
-		if (strncpy_from_user(dir_buf, dir_name, sizeof(dir_buf)) > 0) {
-			if (strstr(dir_buf, "vendor")) {
-				printk(KERN_INFO "MTK_FIX: Blocked overlayfs mount on %s to save MTK Camera!\n", dir_buf);
-				return 0; /* Fake success */
-			}
-		}
-	}
 
 	/* Discard magic */
 	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
