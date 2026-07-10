@@ -1515,10 +1515,12 @@ bypass_orig_flow:
 
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 	// If caller process is zygote, then it is a normal mount, so we just reorder the mnt_id
+	/* DISABLED TO FIX MEDIATEK CAMERA CRASH
 	if (susfs_is_current_zygote_domain()) {
 		mnt->mnt.susfs_mnt_id_backup = mnt->mnt_id;
 		mnt->mnt_id = current->susfs_last_fake_mnt_id++;
 	}
+	*/
 #endif
 
 	lock_mount_hash();
@@ -3973,6 +3975,7 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
 
 	// Here We are only interested in processes of which original mnt namespace belongs to zygote 
 	// Also we just make use of existing 'q' mount pointer, no need to delcare extra mount pointer
+	/* DISABLED TO FIX MEDIATEK CAMERA CRASH
 	if (is_zygote_pid) {
 		last_entry_mnt_id = list_first_entry(&new_ns->list, struct mount, mnt_list)->mnt_id;
 		list_for_each_entry(q, &new_ns->list, mnt_list) {
@@ -3983,6 +3986,7 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
 			q->mnt_id = last_entry_mnt_id++;
 		}
 	}
+	*/
 	// Assign the 'last_entry_mnt_id' to 'current->susfs_last_fake_mnt_id' for later use.
 	// should be fine here assuming zygote is forking/unsharing app in one single thread.
 	// Or should we put a lock here?

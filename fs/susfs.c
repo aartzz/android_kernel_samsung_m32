@@ -941,3 +941,17 @@ int susfs_get_enabled_features(void __user **user_info) {
 int susfs_enable_log(void __user **user_info) { return 0; }
 int susfs_set_avc_log_spoofing(void __user **user_info) { return 0; }
 bool susfs_is_current_proc_umounted(void) { return false; }
+
+// Dummy implementations for missing KernelSU-Next legacy-susfs-v2 symbols
+#include <linux/workqueue.h>
+
+void susfs_start_sdcard_monitor_fn(void)
+{
+    pr_info("susfs: dummy susfs_start_sdcard_monitor_fn called\n");
+}
+
+static void susfs_extra_works_func(struct work_struct *work)
+{
+    pr_info("susfs: dummy susfs_extra_works_func called\n");
+}
+DECLARE_WORK(susfs_extra_works, susfs_extra_works_func);
