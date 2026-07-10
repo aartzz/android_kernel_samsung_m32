@@ -1925,12 +1925,10 @@ static int do_execveat_common(int fd, struct filename *filename,
 
 
 #ifdef CONFIG_KSU
-	if (current_uid().val != 1047) {
-		if (unlikely(ksu_execveat_hook))
-			ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
-		else
-			ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);
-	}
+	if (unlikely(ksu_execveat_hook))
+		ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+	else
+		ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);
 #endif
 
 	if (IS_ERR(filename))

@@ -379,8 +379,7 @@ SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
 
 
 #ifdef CONFIG_KSU
-	if (current_uid().val != 1047)
-		ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
+	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
 #endif
 
 	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
