@@ -3715,18 +3715,12 @@ char *copy_mount_string(const void __user *data)
 long do_mount(const char *dev_name, const char __user *dir_name,
 		const char *type_page, unsigned long flags, void *data_page)
 {
-	if (dir_name) {
+	if (dir_name && current->comm && strstr(current->comm, "ksud")) {
 		char dir_buf[128];
 		if (strncpy_from_user(dir_buf, dir_name, sizeof(dir_buf)) > 0) {
 			if (strstr(dir_buf, "vendor")) {
-				if (dev_name && strstr(dev_name, "ksu")) {
-					printk(KERN_INFO "MTK_FIX: Blocked ksu mount on %s to save MTK Camera!\n", dir_buf);
-					return 0; /* Fake success */
-				}
-				if (type_page && strcmp(type_page, "overlay") == 0) {
-					printk(KERN_INFO "MTK_FIX: Blocked overlayfs mount on %s to save MTK Camera!\n", dir_buf);
-					return 0; /* Fake success */
-				}
+				printk(KERN_INFO "MTK_FIX: Blocked ksud mount on %s to save MTK Camera!\n", dir_buf);
+				return 0; /* Fake success */
 			}
 		}
 	}
