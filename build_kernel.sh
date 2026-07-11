@@ -54,9 +54,7 @@ AK3_DIR="$(pwd)/AnyKernel3"
 if [ -f "$IMAGE_SRC" ]; then
     echo "[OK] Image successfully compiled."
     
-    if [ ! -d "$AK3_DIR" ]; then
-        git clone https://github.com/rsuntk/AnyKernel3.git --depth=1
-    fi
+    [ ! -d "$AK3_DIR" ] && git clone https://github.com/rsuntk/AnyKernel3.git --depth=1
     
     # 1. Limpeza Atômica
     rm -rf "$AK3_DIR/.git"
