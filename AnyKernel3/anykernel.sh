@@ -5,7 +5,7 @@
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=4.14.357-aartzz
+kernel.string=4.14.357-openela-aartzz
 do.devicecheck=0
 do.modules=0
 do.systemless=0
